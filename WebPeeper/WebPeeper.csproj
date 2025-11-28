@@ -1,0 +1,146 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProjectGuid>{A22AC523-2AD7-4E19-A538-49C1C8E70EC2}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>BhModule.WebPeeper</RootNamespace>
+    <AssemblyName>WebPeeper</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <LangVersion>12</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <ErrorReport>prompt</ErrorReport>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <OutputPath>bin\x64\Release\</OutputPath>
+    <DebugSymbols>False</DebugSymbols>
+    <Optimize>true</Optimize>
+    <SatelliteResourceLanguages>en-US</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Win32.Primitives" />
+    <Reference Include="System" />
+    <Reference Include="System.AppContext" />
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.Console" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Diagnostics.Tracing" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Globalization.Calendars" />
+    <Reference Include="System.IdentityModel" />
+    <Reference Include="System.IO" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.ZipFile" />
+    <Reference Include="System.IO.FileSystem" />
+    <Reference Include="System.IO.FileSystem.Primitives" />
+    <Reference Include="System.Linq" />
+    <Reference Include="System.Linq.Expressions" />
+    <Reference Include="System.Net.Sockets" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Reflection" />
+    <Reference Include="System.Runtime" />
+    <Reference Include="System.Runtime.Extensions" />
+    <Reference Include="System.Runtime.InteropServices" />
+    <Reference Include="System.Runtime.InteropServices.RuntimeInformation" />
+    <Reference Include="System.Security.Cryptography.Algorithms" />
+    <Reference Include="System.Security.Cryptography.Encoding" />
+    <Reference Include="System.Security.Cryptography.Primitives" />
+    <Reference Include="System.Security.Cryptography.X509Certificates" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Text.RegularExpressions" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.ReaderWriter" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Window\BookmarkPanel.cs" />
+    <Compile Include="WebPeeperModule.cs" />
+    <Compile Include="Window\BrowserWindowView.cs" />
+    <Compile Include="Window\BrowserWindow.cs" />
+    <Compile Include="CefService.cs" />
+    <Compile Include="Window\IconButton.cs" />
+    <Compile Include="ModuleSettings.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UIService.cs" />
+    <Compile Include="Utils.cs" />
+    <Compile Include="Window\WebPainter.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
+    <None Include="manifest.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BlishHUD">
+      <Version>1.2.0</Version>
+    </PackageReference>
+    <PackageReference Include="CefSharp.OffScreen">
+      <Version>103.0.90</Version>
+    </PackageReference>
+    <PackageReference Include="System.Drawing.Common">
+      <Version>10.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <WCFMetadata Include="Connected Services\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="ref\empty.png" />
+    <Content Include="ref\what.png" />
+    <Content Include="ref\add.png" />
+    <Content Include="ref\bookmark.png" />
+    <Content Include="ref\edit.png" />
+    <Content Include="ref\error.png" />
+    <Content Include="ref\onContextCreated.js" />
+    <Content Include="ref\pin.png" />
+    <Content Include="ref\scrollbar.css" />
+    <Content Include="ref\logo.png" />
+    <Content Include="ref\logo-hover.png" />
+    <Content Include="ref\error.png" />
+    <Content Include="ref\sort.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CefHelper\CefHelper.csproj">
+      <Project>{58af652c-4194-4343-b724-e30a88aba248}</Project>
+      <Name>CefHelper</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <WebPeeperBhmPath>$(OutDir)$(ProjectName).bhm</WebPeeperBhmPath>
+    <TempPath>$(OutDir).bhm\</TempPath>
+  </PropertyGroup>
+  <Target Name="BuildWebPeeperModule" AfterTargets="Build">
+    <Delete Files="$(WebPeeperBhmPath)" />
+    <ItemGroup>
+      <RefFiles Include="$(OutDir)ref\**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RefFiles)" DestinationFolder="$(TempPath)ref\%(RecursiveDir)" />
+    <Copy SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)manifest.json" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.OffScreen.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.Core.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.Core.Runtime.dll" DestinationFolder="$(TempPath)_\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.exe" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.Core.dll" DestinationFolder="$(TempPath)" />
+    <ZipDirectory SourceDirectory="$(TempPath)" DestinationFile="$(WebPeeperBhmPath)" Overwrite="true" />
+    <RemoveDir Directories="$(TempPath)" />
+  </Target>
+</Project>

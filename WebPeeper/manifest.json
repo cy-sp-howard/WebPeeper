@@ -1,0 +1,17 @@
+{
+  "name": "WebPeeper",
+  "version": "1.0.0",
+  "namespace": "Yeh.WebPeeper",
+  "package": "WebPeeper.dll",
+  "manifest_version": 1,
+  "description": "A web browser dependent on the GW2 CEF library.",
+  "dependencies": {
+    "bh.blishhud": ">=1.2.0"
+  },
+  "url": "https://github.com/cy-sp-howard/WebPeeper",
+  "contributors": [
+    {
+      "name": "yeh"
+    }
+  ]
+}
