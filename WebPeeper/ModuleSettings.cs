@@ -30,7 +30,7 @@ namespace BhModule.WebPeeper
         public SettingEntry<string> WebBgColor { get; private set; }
         public SettingEntry<float> WebWindowOpacity { get; private set; }
         public SettingEntry<bool> IsAutoPauseWeb { get; private set; }
-        public SettingEntry<bool> IsAutoQuitPrcess { get; private set; }
+        public SettingEntry<bool> IsAutoQuitProcess { get; private set; }
         public SettingEntry<bool> IsMobileLayout { get; private set; }
         public SettingEntry<bool> IsUseTouch { get; private set; }
         public SettingEntry<bool> IsCleanMode { get; private set; }
@@ -90,13 +90,13 @@ namespace BhModule.WebPeeper
                 WebPeeperSettingsView.UpdateWebWindowOpacityTitle();
             };
             IsAutoPauseWeb = settings.DefineSetting(nameof(IsAutoPauseWeb), false, () => "Pause the Web Process while Close the Web Window", () => "");
-            IsAutoQuitPrcess = settings.DefineSetting(nameof(IsAutoQuitPrcess), false, () => "Quit the Web Process while Close the Web Window", () => "");
-            IsAutoQuitPrcess.SettingChanged += (sender, e) =>
+            IsAutoQuitProcess = settings.DefineSetting(nameof(IsAutoQuitProcess), false, () => "Quit the Web Process while Close the Web Window", () => "");
+            IsAutoQuitProcess.SettingChanged += (sender, e) =>
             {
                 IsAutoPauseWeb.SetDisabled(e.NewValue);
                 WebPeeperSettingsView.UpdateIsAutoPauseWebState();
             };
-            IsAutoPauseWeb.SetDisabled(IsAutoQuitPrcess.Value);
+            IsAutoPauseWeb.SetDisabled(IsAutoQuitProcess.Value);
             IsMobileLayout = settings.DefineSetting(nameof(IsMobileLayout), true, () => "Use Mobile Website", () => "Whether use mobile User-Agent.");
             IsMobileLayout.SettingChanged += (s, e) => { WebPeeperModule.Instance.CefService.ApplyUserAgent(); };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");

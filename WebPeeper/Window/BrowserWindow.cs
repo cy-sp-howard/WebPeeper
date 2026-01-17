@@ -156,7 +156,7 @@ namespace BhModule.WebPeeper
             if (CefService.WebBrowser is not null)
             {
                 if (CefService.WebBrowser.CanExecuteJavascriptInMainFrame) CefService.WebBrowser.ExecuteScriptAsync("webPeeper_blur()");
-                if (Settings.IsAutoQuitPrcess.Value) CefService.CloseWebBrowser();
+                if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
                 else if (Settings.IsAutoPauseWeb.Value)
                 {
                     CefService.WebBrowser?.GetBrowserHost().WasHidden(true);
