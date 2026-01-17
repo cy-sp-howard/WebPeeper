@@ -18,7 +18,7 @@ namespace BhModule.WebPeeper
         static readonly Rectangle _windowBgEdgeSpliceBounds = new(35, 20, 60, 35);
         static readonly Rectangle _windowRegionParam = new(-_windowBgOffset.X, -_windowBgOffset.Y, _windowSize.X, _windowSize.Y);
         static readonly Rectangle _contentRegionParam = new(50, 20, _windowSize.X - 30, _windowSize.Y - 5);
-        static readonly Texture2D _bg = BuildBg();
+        static Texture2D _bg;
         Rectangle _titleBounds;
         static readonly Texture2D _pinTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("pin.png");
         Rectangle _pinBounds;
@@ -32,7 +32,7 @@ namespace BhModule.WebPeeper
         string _titleWithEllipsis = "-";
         CefService CefService => WebPeeperModule.Instance.CefService;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
-        public BrowserWindow() : base(_bg, _windowRegionParam, _contentRegionParam)
+        public BrowserWindow() : base(BuildBg(), _windowRegionParam, _contentRegionParam)
         {
             Subtitle = "-";
             Parent = Graphics.SpriteScreen;
@@ -79,7 +79,8 @@ namespace BhModule.WebPeeper
             using var ctx = Graphics.LendGraphicsDeviceContext();
             var windowBg = new Texture2D(ctx.GraphicsDevice, windowBgSize.X, windowBgSize.Y);
             windowBg.SetData(windowBgData);
-            return windowBg;
+            _bg = windowBg;
+            return _bg;
         }
         void SetMaxOpacity()
         {
@@ -100,7 +101,7 @@ namespace BhModule.WebPeeper
                 // cjk not support
                 spriteBatch.DrawStringOnCtrl(this, _titleWithEllipsis, Content.DefaultFont16, _titleBounds, ContentService.Colors.ColonialWhite);
             }
-            finally { }
+            catch { }
         }
         void PaintPin(SpriteBatch spriteBatch)
         {
@@ -221,7 +222,7 @@ namespace BhModule.WebPeeper
         protected override void DisposeControl()
         {
             WebPainter.DisposeWebTexture();
-            _bg?.Dispose();
+            _bg.Dispose(); 
             base.DisposeControl();
         }
     }

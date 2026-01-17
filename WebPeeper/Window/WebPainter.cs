@@ -41,13 +41,13 @@ namespace BhModule.WebPeeper
         public WebPainter()
         {
             Instance = this;
-            WebBrowser.Paint += CefOnPaint;
+            if (WebBrowser is not null) WebBrowser.Paint += CefOnPaint;
             GameService.Input.Keyboard.KeyStateChanged += KeyboardHandler;
             ApplyBgTexture();
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
-            if (WebBrowser != null && WebBrowser.IsBrowserInitialized && !Disabled)
+            if (WebBrowser is not null && WebBrowser.IsBrowserInitialized && !Disabled)
             {
                 var isUseTouch = Settings.IsUseTouch.Value;
                 var borwserHost = WebBrowser.GetBrowserHost();
@@ -209,7 +209,7 @@ namespace BhModule.WebPeeper
         public void ApplyBgTexture()
         {
             try { _webBackgroundColor = ColorHelper.FromHex(Settings.WebBgColor.Value); }
-            finally { }
+            catch { }
         }
         void SetErrorTextureRect()
         {
@@ -220,7 +220,7 @@ namespace BhModule.WebPeeper
         }
         void SetBrowserSize()
         {
-            WebBrowser.ResizeAsync(Width, Height);
+            WebBrowser?.ResizeAsync(Width, Height);
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {
@@ -250,7 +250,7 @@ namespace BhModule.WebPeeper
         protected override void DisposeControl()
         {
             GameService.Input.Keyboard.KeyStateChanged -= KeyboardHandler;
-            WebBrowser.Paint -= CefOnPaint;
+            if (WebBrowser is not null) WebBrowser.Paint -= CefOnPaint;
             _cefPaintProcess?.Dispose();
         }
         static public void DisposeWebTexture() { _webTexture?.Dispose(); }

@@ -122,6 +122,7 @@ namespace BhModule.WebPeeper
         }
         void FocusBHWindow(object sender, EventArgs e)
         {
+            if (WebPeeperModule.Instance.UIService?.BrowserWindow?.Visible == false) return;
             Utils.SetForegroundWindow(WebPeeperModule.BlishHudInstance.FormHandle);
             WebPeeperModule.Instance.CefService?.FocusBlurredElement();
         }
@@ -211,7 +212,7 @@ namespace BhModule.WebPeeper
             {
                 _colorPreview.Color = ColorHelper.FromHex(Value);
             }
-            finally { }
+            catch { }
         }
     }
     public class ColorPreview : Control

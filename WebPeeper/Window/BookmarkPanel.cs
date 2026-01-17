@@ -56,7 +56,7 @@ namespace BhModule.WebPeeper
             };
             _addBtn.Click += delegate
             {
-                if (!WebBrowser.CanExecuteJavascriptInMainFrame) return;
+                if (WebBrowser is null || !WebBrowser.CanExecuteJavascriptInMainFrame) return;
                 var getTitleTask = WebBrowser.EvaluateScriptAsync("document.title");
                 getTitleTask.Wait(TimeSpan.FromSeconds(1));
                 var bookmarkName = getTitleTask.IsCanceled ? WebPeeperModule.Instance.UIService.BrowserWindow.Subtitle : (string)getTitleTask.Result.Result;
@@ -96,7 +96,7 @@ namespace BhModule.WebPeeper
                     _bookmarkMenuItems[bookmark] = CreateBookmarkItem(bookmark);
                 }
             }
-            finally { }
+            catch { }
         }
         public override void Show()
         {
@@ -365,9 +365,10 @@ namespace BhModule.WebPeeper
         }
         protected override void OnClick(MouseEventArgs e)
         {
-            if (!_editing)
+            var browser = WebPeeperModule.Instance.CefService.WebBrowser;
+            if (!_editing && browser is not null)
             {
-                WebPeeperModule.Instance.CefService.WebBrowser.Load(_bookmark.URL);
+                browser.Load(_bookmark.URL);
                 Parent.Parent.Hide();
             }
             base.OnClick(e);

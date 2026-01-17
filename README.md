@@ -1,7 +1,15 @@
 # <img src="WebPeeper/ref/logo.png" width="30px" /> WebPeeper - Blish-HUD Module
 
-<img src="screenshot.png" width="50%" />  
-A Web Browser dependent on the GW2 CEF library.
+<img src="screenshot.png" width="50%" /> 
+ 
+A Web Browser dependent on the GW2 CEF library.  
+
+<br>
+<br>
+<br>
+
+⚠️ $\Large\color{red}{\text{The Core is Based on Chromium 103.0.5060.114, which was Released in 2022.}}$
+⚠️ $\Large\color{red}{\text{DO NOT Browse Untrusted or Security-Sensitive Websites with an Outdated Chromium Version}}$
 
 ## Download
 From [Releases](https://github.com/cy-sp-howard/WebPeeper/releases) page.  

@@ -56,6 +56,10 @@ namespace BhModule.WebPeeper
         ChromiumWebBrowser WebBrowser => WebPeeperModule.Instance.CefService.WebBrowser;
         public NavigationBar()
         {
+            Instance = this;
+            Height = 30;
+            SetChildren();
+            if (WebBrowser is null) return;
             if (WebBrowser.CanExecuteJavascriptInMainFrame)
             {
                 WebBrowser.EvaluateScriptAsync("document.fullscreen").ContinueWith(t =>
@@ -63,9 +67,6 @@ namespace BhModule.WebPeeper
                     Visible = !(bool)t.Result.Result;
                 });
             }
-            Instance = this;
-            Height = 30;
-            SetChildren();
             WebBrowser.LoadingStateChanged += HandleLoading;
             WebBrowser.AddressChanged += HandleAddress;
         }
@@ -79,16 +80,16 @@ namespace BhModule.WebPeeper
             _backBtn = new IconButton(_btnTexture, Height, 2)
             {
                 Parent = this,
-                Visible = WebBrowser.CanGoBack
+                Visible = WebBrowser?.CanGoBack ?? false
             };
-            _backBtn.Click += delegate { WebBrowser.Back(); };
+            _backBtn.Click += delegate { WebBrowser?.Back(); };
             _fowardBtn = new IconButton(_btnTexture, Height, 2)
             {
                 Parent = this,
-                Visible = WebBrowser.CanGoForward,
+                Visible = WebBrowser?.CanGoForward ?? false,
                 IconRotation = MathHelper.ToRadians(180f)
             };
-            _fowardBtn.Click += delegate { WebBrowser.Forward(); };
+            _fowardBtn.Click += delegate { WebBrowser?.Forward(); };
 
             var bookmarkBtn = new IconButton(_bookmarkBtnTexture, Height, 2) { Parent = this };
             bookmarkBtn.Click += delegate
@@ -106,7 +107,7 @@ namespace BhModule.WebPeeper
             {
                 if (string.IsNullOrWhiteSpace(_addressInput.Text))
                 {
-                    _addressInput.Text = WebBrowser.Address;
+                    _addressInput.Text = WebBrowser?.Address ?? "";
                     return;
                 }
                 HandleLoading(this, new(null, true, false, true));
@@ -117,11 +118,11 @@ namespace BhModule.WebPeeper
                     WebBrowser.LoadingStateChanged -= stopManuallyErrTrigger;
                     cts.Cancel();
                 }
-                WebBrowser.LoadingStateChanged += stopManuallyErrTrigger;
-                WebBrowser.LoadUrlAsync(WebPeeperModule.Instance.CefService.LastAddressInputText);
+                if (WebBrowser is not null) WebBrowser.LoadingStateChanged += stopManuallyErrTrigger;
+                WebBrowser?.LoadUrlAsync(WebPeeperModule.Instance.CefService.LastAddressInputText);
                 Task.Delay(1000, cts.Token).ContinueWith(t =>
                 {
-                    WebBrowser.LoadingStateChanged -= stopManuallyErrTrigger;
+                    if (WebBrowser is not null) WebBrowser.LoadingStateChanged -= stopManuallyErrTrigger;
                     if (t.IsCanceled || t.IsFaulted) return;
                     HandleLoading(this, new(null, true, false, false));
                     WebPeeperModule.Instance.CefService.OnUrlLoadError(this, new(null, null, CefErrorCode.InvalidUrl, "", _addressInput.Text));
@@ -131,13 +132,13 @@ namespace BhModule.WebPeeper
             {
                 _addressInput.SelectionStart = !e.Value ? _addressInput.Text.Length : 0;
                 _addressInput.SelectionEnd = _addressInput.Text.Length;
-                if (!e.Value && _addressInput.Text.Length == 0) _addressInput.Text = WebBrowser.Address;
+                if (!e.Value && _addressInput.Text.Length == 0) _addressInput.Text = WebBrowser?.Address ?? "";
             };
-            _addressInput.Text = WebBrowser.Address;
+            _addressInput.Text = WebBrowser?.Address ?? "";
 
             _loading = new LoadingSpinner()
             {
-                Visible = WebBrowser.IsLoading,
+                Visible = WebBrowser?.IsLoading ?? false,
                 Enabled = false,
                 Parent = this,
                 Size = new(_addressInput.Height, _addressInput.Height)
@@ -188,8 +189,11 @@ namespace BhModule.WebPeeper
         }
         protected override void DisposeControl()
         {
-            WebBrowser.LoadingStateChanged -= HandleLoading;
-            WebBrowser.AddressChanged -= HandleAddress;
+            if (WebBrowser is not null)
+            {
+                WebBrowser.LoadingStateChanged -= HandleLoading;
+                WebBrowser.AddressChanged -= HandleAddress;
+            }
             BookmarkBtnClicked = null;
         }
     }

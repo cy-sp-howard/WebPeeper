@@ -103,9 +103,12 @@ namespace BhModule.WebPeeper
                 var detinationFile = Path.Combine(CefSharpDllPath, path);
                 Directory.CreateDirectory(Path.GetDirectoryName(detinationFile));
                 byte[] file = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(path);
-                using var fileStream = new FileStream(detinationFile, FileMode.Create, FileAccess.Write, FileShare.Write, 4096);
-                try { fileStream.Write(file, 0, file.Length); }
-                finally { }
+                try
+                {
+                    using var fileStream = new FileStream(detinationFile, FileMode.Create, FileAccess.Write, FileShare.Write, 4096);
+                    fileStream.Write(file, 0, file.Length);
+                }
+                catch { }
             }
         }
         void SetupCefSharpDllFolder()
@@ -134,7 +137,7 @@ namespace BhModule.WebPeeper
         }
         public void FocusBlurredElement()
         {
-            if (!_webBrowser.CanExecuteJavascriptInMainFrame) return;
+            if (_webBrowser is null || !_webBrowser.CanExecuteJavascriptInMainFrame) return;
             _webBrowser.ExecuteScriptAsync("webPeeper_focusBlurredElement()");
         }
         async public void CloseWebBrowser()
@@ -153,7 +156,7 @@ namespace BhModule.WebPeeper
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
-            _webBrowser.Dispose(); // make sure close for restart
+            _webBrowser?.Dispose(); // make sure close for restart
         }
         (Stream, string) OnBlishHudSchemeRequested(IRequest request)
         {
@@ -287,25 +290,28 @@ namespace BhModule.WebPeeper
         }
         protected override void WndProc(ref Message m)
         {
-            _m = m;
-            switch ((WM)m.Msg)
+            if (Browser is not null)
             {
-                case WM.KEYUP:
-                case WM.KEYDOWN:
-                case WM.CHAR:
-                    SendKey();
-                    break;
-                case WM.IME_COMPOSITION:
-                    SetCefComposition();
-                    return;
-                case WM.IME_ENDCOMPOSITION:
-                    Browser?.GetBrowserHost().ImeSetComposition("", [], new(int.MaxValue, int.MaxValue), new(0, 0));
-                    Browser?.GetBrowserHost().ImeFinishComposingText(false);
-                    return;
-                case WM.IME_STARTCOMPOSITION:
-                    return;
+                _m = m;
+                switch ((WM)m.Msg)
+                {
+                    case WM.KEYUP:
+                    case WM.KEYDOWN:
+                    case WM.CHAR:
+                        SendKey();
+                        break;
+                    case WM.IME_COMPOSITION:
+                        SetCefComposition();
+                        return;
+                    case WM.IME_ENDCOMPOSITION:
+                        Browser?.GetBrowserHost().ImeSetComposition("", [], new(int.MaxValue, int.MaxValue), new(0, 0));
+                        Browser?.GetBrowserHost().ImeFinishComposingText(false);
+                        return;
+                    case WM.IME_STARTCOMPOSITION:
+                        return;
+                }
+                _m = new();
             }
-            _m = new();
             base.WndProc(ref m);
         }
         bool LParmHasFlag(object flag)
@@ -330,25 +336,25 @@ namespace BhModule.WebPeeper
         }
         void SendKey()
         {
-                // Browser.GetBrowserHost().SendKeyEvent(_m.Msg, _m.WParam.CastToInt32(), _m.LParam.CastToInt32()); 
-                // port from CefBrowserHostWrapper::SendKeyEvent , due to above throw System.InvalidProgramException: Invalid IL code in wine
-                var wParam = _m.WParam.CastToInt32();
-                var lParam = _m.LParam.CastToInt32();
-                var evt = new KeyEvent()
+            // Browser.GetBrowserHost().SendKeyEvent(_m.Msg, _m.WParam.CastToInt32(), _m.LParam.CastToInt32()); 
+            // port from CefBrowserHostWrapper::SendKeyEvent , due to above throw System.InvalidProgramException: Invalid IL code in wine
+            var wParam = _m.WParam.CastToInt32();
+            var lParam = _m.LParam.CastToInt32();
+            var evt = new KeyEvent()
+            {
+                Modifiers = GetCefKeyboardModifiers(wParam, lParam),
+                WindowsKeyCode = wParam,
+                NativeKeyCode = lParam,
+                IsSystemKey = false,
+                Type = (WM)_m.Msg switch
                 {
-                    Modifiers = GetCefKeyboardModifiers(wParam, lParam),
-                    WindowsKeyCode = wParam,
-                    NativeKeyCode = lParam,
-                    IsSystemKey = false,
-                    Type = (WM)_m.Msg switch
-                    {
-                        WM.KEYDOWN => KeyEventType.KeyDown,
-                        WM.KEYUP => KeyEventType.KeyUp,
-                        WM.CHAR => KeyEventType.Char,
-                        _ => (KeyEventType)(-1),
-                    }
-                };
-                Browser.GetBrowserHost().SendKeyEvent(evt);
+                    WM.KEYDOWN => KeyEventType.KeyDown,
+                    WM.KEYUP => KeyEventType.KeyUp,
+                    WM.CHAR => KeyEventType.Char,
+                    _ => (KeyEventType)(-1),
+                }
+            };
+            Browser?.GetBrowserHost().SendKeyEvent(evt);
         }
         static bool IsKeyDown(VK wparam)
         {
