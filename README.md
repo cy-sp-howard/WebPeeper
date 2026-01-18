@@ -8,8 +8,8 @@ A Web Browser dependent on the GW2 CEF library.
 <br>
 <br>
 
-⚠️ $\Large\color{red}{\text{The Core is Based on Chromium 103.0.5060.114, which was Released in 2022.}}$
-⚠️ $\Large\color{red}{\text{DO NOT Browse Untrusted or Security-Sensitive Websites with an Outdated Chromium Version}}$
+#### **⚠️ The Core is Based on Chromium 103.0.5060.114, which was Released in 2022.**
+#### **⚠️ DO NOT Browse Untrusted or Security-Sensitive Websites with an Outdated Chromium Version.**
 
 ## Download
 From [Releases](https://github.com/cy-sp-howard/WebPeeper/releases) page.  
@@ -17,7 +17,7 @@ From [Releases](https://github.com/cy-sp-howard/WebPeeper/releases) page.
 ## Remarks
 - Uses Mobile User-Agent by default. Can be switched to PC in the settings.
 - Allow simulating touch event to replace the default mouse event.
-- The GW2 CEF library uses Chromium version 103.
+- The GW2 CEF library uses Chromium version 103.0.5060.114.
 - Sub-Processes will keep running in the background until Blish-HUD closes. Closes certain processes via `Quit Process` command.
 - The Module extracts necessary files to `%ProgramData%\Blish HUD\cache\cefsharp\`.
 - Chromium user-data is created at `%USERPROFILE%\Documents\Guild Wars 2\addons\blishhud\webpeeper\`.
