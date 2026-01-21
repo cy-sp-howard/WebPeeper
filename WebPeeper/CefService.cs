@@ -5,6 +5,7 @@ using CefSharp;
 using CefSharp.Internals;
 using CefSharp.OffScreen;
 using CefSharp.Structs;
+using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -139,6 +140,23 @@ namespace BhModule.WebPeeper
         {
             if (_webBrowser is null || !_webBrowser.CanExecuteJavascriptInMainFrame) return;
             _webBrowser.ExecuteScriptAsync("webPeeper_focusBlurredElement()");
+        }
+        public Task SetBrowserSize(int w, int h)
+        {
+            if (WebBrowser is null) return Task.FromResult(false);
+            return WebBrowser.ResizeAsync(w, h);
+        }
+        public Task<Texture2D> GetScreenshot()
+        {
+            if (WebBrowser is null) return Task.FromResult<Texture2D>(null);
+            return WebBrowser.CaptureScreenshotAsync().ContinueWith(t =>
+            {
+                var bufferSize = t.Result.Length;
+                using var ctx = GraphicsService.Graphics.LendGraphicsDeviceContext();
+                using var memoryStream = new MemoryStream();
+                memoryStream.Write(t.Result, 0, bufferSize);
+                return Texture2D.FromStream(ctx.GraphicsDevice, memoryStream);
+            });
         }
         async public void CloseWebBrowser()
         {

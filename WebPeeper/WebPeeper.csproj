@@ -74,6 +74,7 @@
     <Compile Include="Window\BrowserWindowView.cs" />
     <Compile Include="Window\BrowserWindow.cs" />
     <Compile Include="CefService.cs" />
+    <Compile Include="Window\Warning.cs" />
     <Compile Include="Window\IconButton.cs" />
     <Compile Include="ModuleSettings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

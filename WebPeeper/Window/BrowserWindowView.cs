@@ -1,4 +1,5 @@
-﻿using Blish_HUD;
+﻿using BhModule.WebPeeper.Window;
+using Blish_HUD;
 using Blish_HUD.Controls;
 using Blish_HUD.Graphics.UI;
 using CefSharp;
@@ -24,10 +25,9 @@ namespace BhModule.WebPeeper
             // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
             WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
             {
-                _windowContent = new WindowContent()
+                _windowContent = new WindowContent(_window.ContentRegion.Size)
                 {
-                    Parent = window,
-                    Size = _window.ContentRegion.Size
+                    Parent = window
                 };
                 _window.Resized += OnWindowResize;
             });
@@ -197,19 +197,15 @@ namespace BhModule.WebPeeper
             BookmarkBtnClicked = null;
         }
     }
-    public class WindowContent : FlowPanel
+    public class WindowContent : Panel
     {
-        NavigationBar _navigationBar;
-        WebPainter _webPainter;
-        BookmarkPanel _bookmarkPanel;
-        public WindowContent()
+        readonly NavigationBar _navigationBar;
+        Control _mainContent;
+        readonly BookmarkPanel _bookmarkPanel;
+        const int _gap = 10;
+        public WindowContent(Point size)
         {
-            ControlPadding = new Vector2(0, 10);
-            FlowDirection = ControlFlowDirection.SingleTopToBottom;
-            SetChildren();
-        }
-        void SetChildren()
-        {
+            _size = size;
             _navigationBar = new NavigationBar()
             {
                 Parent = this,
@@ -221,56 +217,61 @@ namespace BhModule.WebPeeper
             };
             _navigationBar.Hidden += OnNavigationBarVisibleChanged;
             _navigationBar.Shown += OnNavigationBarVisibleChanged;
-            _webPainter = new WebPainter()
-            {
-                Parent = this,
-            };
-            _webPainter.Click += delegate
+            CreateMainContent();
+            _bookmarkPanel = new BookmarkPanel() { Parent = this };
+            _bookmarkPanel.Shown += delegate { if (_mainContent is WebPainter wp) wp.Disabled = true; };
+            _bookmarkPanel.Hidden += delegate { if (_mainContent is WebPainter wp) wp.Disabled = false; };
+            OnResized(new(size, size)); // init children size
+        }
+        protected override void OnResized(ResizedEventArgs e)
+        {
+            ResetNavigationBarRect();
+            ResetMainContentRect();
+            ResetBookmarkRect();
+            base.OnResized(e);
+        }
+        void CreateMainContent()
+        {
+            if (Warning.Accepted) _mainContent = new WebPainter();
+            else _mainContent = new Warning(() => { CreateMainContent(); ResetMainContentRect(); });
+            _mainContent.Parent = this;
+            _mainContent.Click += delegate
             {
                 if (!_bookmarkPanel.Visible) return;
                 _bookmarkPanel.Hide();
             };
-            _bookmarkPanel = new BookmarkPanel() { Parent = this };
-            _bookmarkPanel.Shown += delegate { _webPainter.Disabled = true; };
-            _bookmarkPanel.Hidden += delegate { _webPainter.Disabled = false; };
+            if (_bookmarkPanel is not null)
+            {
+                _bookmarkPanel.Parent = null;
+                _bookmarkPanel.Parent = this;
+            }
         }
-        public override void RecalculateLayout()
+        void ResetNavigationBarRect()
         {
-            base.RecalculateLayout();
-            if (_bookmarkPanel is null) return;
-            _bookmarkPanel.Location = _webPainter.Location;
-        }
-        protected override void OnResized(ResizedEventArgs e)
-        {
-            ResetNavigationBarSize();
-            ResetWebPainterSize();
-            ResetBookmarkSize();
-            base.OnResized(e);
-        }
-        void ResetNavigationBarSize()
-        {
+            _navigationBar.Location = Point.Zero;
             _navigationBar.Width = Width;
         }
-        void ResetWebPainterSize()
+        void ResetMainContentRect()
         {
             if (_navigationBar.Visible)
             {
-                _webPainter.Size = new(Size.X - 1, Size.Y - _navigationBar.Height - 1 - (int)ControlPadding.Y);
+                _mainContent.Location = new(0, _navigationBar.Bottom + _gap);
+                _mainContent.Size = new(Size.X - 1, Size.Y - _navigationBar.Height - 1 - _gap);
             }
             else
             {
-                _webPainter.Size = new(Size.X - 1, Size.Y - 1);
+                _mainContent.Location = Point.Zero;
+                _mainContent.Size = new(Size.X - 1, Size.Y - 1);
             }
         }
-        void ResetBookmarkSize()
+        void ResetBookmarkRect()
         {
-            _bookmarkPanel.Height = MathHelper.Min(_webPainter.Height, 700);
-            _bookmarkPanel.Width = MathHelper.Max(_webPainter.Width / 2, 150);
+            _bookmarkPanel.Location = _mainContent.Location;
+            _bookmarkPanel.Size = new(MathHelper.Max(_mainContent.Width / 2, 150), MathHelper.Min(_mainContent.Height, 700));
         }
         void OnNavigationBarVisibleChanged(object sender, EventArgs e)
         {
-            ResetWebPainterSize();
-            RecalculateLayout();
+            ResetMainContentRect();
         }
     }
 }

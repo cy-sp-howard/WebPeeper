@@ -5,8 +5,6 @@
 A Web Browser dependent on the GW2 CEF library.  
 
 <br>
-<br>
-<br>
 
 #### **⚠️ The Core is Based on Chromium 103.0.5060.114, which was Released in 2022.**
 #### **⚠️ DO NOT Browse Untrusted or Security-Sensitive Websites with an Outdated Chromium Version.**

@@ -23,18 +23,18 @@ namespace BhModule.WebPeeper
         }
         static Texture2D _webTexture;
         byte[] _webTextureBufferBytes = [];
-        Rectangle _webTextureRect;
+        Rectangle _webTextureRect = Rectangle.Empty;
         CefService CefService => WebPeeperModule.Instance.CefService;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
         ChromiumWebBrowser WebBrowser => CefService.WebBrowser;
-        bool _isLeftMouseButtonPressed;
-        bool _isRightMouseButtonPressed;
-        static bool _isError;
+        bool _isLeftMouseButtonPressed = false;
+        bool _isRightMouseButtonPressed = false;
+        static bool _isError = false;
         static readonly Texture2D _errorTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("error.png");
         static readonly Texture2D _quesTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("what.png");
         static readonly Color _errorTextureColor = new(0x80808080);
-        Rectangle _errorTextureRect;
-        Rectangle _quesTextureRect;
+        Rectangle _errorTextureRect = Rectangle.Empty;
+        Rectangle _questionTextureRect = Rectangle.Empty;
         Process _cefPaintProcess;
         Color _webBackgroundColor;
         public bool Disabled = false;
@@ -44,6 +44,11 @@ namespace BhModule.WebPeeper
             if (WebBrowser is not null) WebBrowser.Paint += CefOnPaint;
             GameService.Input.Keyboard.KeyStateChanged += KeyboardHandler;
             ApplyBgTexture();
+            if (_webTexture is null) CefService.GetScreenshot().ContinueWith(t =>
+            {
+                if (_webTexture is not null) return;
+                _webTexture = t.Result;
+            });
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
@@ -156,8 +161,8 @@ namespace BhModule.WebPeeper
         }
         protected override void OnResized(ResizedEventArgs e)
         {
-            _webTextureRect = new(Point.Zero, Size);
-            SetBrowserSize();
+            _webTextureRect.Size = Size;
+            CefService.SetBrowserSize(Width, Height);
             SetErrorTextureRect();
             base.OnResized(e);
         }
@@ -170,7 +175,7 @@ namespace BhModule.WebPeeper
             else if (_isError)
             {
                 spriteBatch.DrawOnCtrl(this, _errorTexture, _errorTextureRect, _errorTextureColor);
-                spriteBatch.DrawOnCtrl(this, _quesTexture, _quesTextureRect, _quesTexture.Bounds, _errorTextureColor, MathHelper.ToRadians(30f), Vector2.Zero);
+                spriteBatch.DrawOnCtrl(this, _quesTexture, _questionTextureRect, _quesTexture.Bounds, _errorTextureColor, MathHelper.ToRadians(30f), Vector2.Zero);
             }
             else
             {
@@ -180,6 +185,7 @@ namespace BhModule.WebPeeper
         }
         void CefOnPaint(object sender, OnPaintEventArgs e)
         {
+            e.Handled = true;
             if (!WebPeeperModule.Instance.UIService.BrowserWindow.Visible) return;
             var bufferSize = e.Width * e.Height * sizeof(int);
             if (bufferSize != _webTextureBufferBytes.Length)
@@ -216,11 +222,7 @@ namespace BhModule.WebPeeper
             var errTextureSize = MathHelper.Min((int)(Size.X * 0.6), (int)(Size.Y * 0.6));
             _errorTextureRect = new(0, Size.Y - errTextureSize, errTextureSize, errTextureSize);
             var quesTextureSize = (int)(errTextureSize * 0.2);
-            _quesTextureRect = new((int)(errTextureSize * 0.7), Size.Y - (int)(errTextureSize * 1.05), quesTextureSize, quesTextureSize);
-        }
-        void SetBrowserSize()
-        {
-            WebBrowser?.ResizeAsync(Width, Height);
+            _questionTextureRect = new((int)(errTextureSize * 0.7), Size.Y - (int)(errTextureSize * 1.05), quesTextureSize, quesTextureSize);
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {

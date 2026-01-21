@@ -36,6 +36,7 @@ namespace BhModule.WebPeeper
         public SettingEntry<bool> IsCleanMode { get; private set; }
         public SettingEntry<bool> IsFollowBhFps { get; private set; }
         public SettingEntry<bool> IsBlockKeybinds { get; private set; }
+        public SettingEntry<bool> IsShowWarning { get; private set; }
         public ModuleSettings(SettingCollection settings)
         {
             InitUISetting(settings);
@@ -103,6 +104,7 @@ namespace BhModule.WebPeeper
             IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User-Data", () => "Clear cache and user-data while WebPeeper module initialize.");
             IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if unchecked.");
             IsBlockKeybinds = settings.DefineSetting(nameof(IsBlockKeybinds), true, () => "Block All Blish-HUD Keybinds while the Web is Accepting Input", () => "Uncheck if keybinds fail after typing.");
+            IsShowWarning = settings.DefineSetting(nameof(IsShowWarning), true, () => "Show Outdated Warning", () => "");
         }
         public void Unload()
         {
