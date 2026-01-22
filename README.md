@@ -30,7 +30,7 @@ From [Releases](https://github.com/cy-sp-howard/WebPeeper/releases) page.
 
 More detail from Blish-HUD Offical [Tutorial](https://blishhud.com/docs/user/guides/installing-modules#manually-installing-modules).
 
-## Download Blish HUD
+## Download Blish-HUD
 From [Releases](https://github.com/blish-hud/Blish-HUD/releases) page here on the [Blish Repo](https://github.com/blish-hud/Blish-HUD).
 
 
