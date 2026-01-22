@@ -28,7 +28,7 @@ From [Releases](https://github.com/cy-sp-howard/WebPeeper/releases) page.
 5. Click the Blish-HUD icon in the game then Left-click the `WebPeeper` tab under `Manage Modules` section.
 6. Click the `Enable` button to enable `WebPeeper` module.
 
-More detail from Blish-HUD Offical [Tutorial](https://blishhud.com/docs/user/installing-modules#manually-installing-modules).
+More detail from Blish-HUD Offical [Tutorial](https://blishhud.com/docs/user/guides/installing-modules#manually-installing-modules).
 
 ## Download Blish HUD
 From [Releases](https://github.com/blish-hud/Blish-HUD/releases) page here on the [Blish Repo](https://github.com/blish-hud/Blish-HUD).
