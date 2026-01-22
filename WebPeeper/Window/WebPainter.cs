@@ -196,7 +196,7 @@ namespace BhModule.WebPeeper
             Utils.ReadProcessMemory(_cefPaintProcess.Handle, e.BufferHandle, _webTextureBufferBytes, bufferSize, out _);
             if (_webTexture is null || _webTexture.Format != SurfaceFormat.Bgra32 || _webTexture.Width != e.Width || _webTexture.Height != e.Height)
             {
-                _webTexture?.Dispose();
+                DisposeWebTexture();
                 using var ctx = Graphics.LendGraphicsDeviceContext();
                 _webTexture = new Texture2D(
                          ctx.GraphicsDevice,
@@ -255,7 +255,7 @@ namespace BhModule.WebPeeper
             if (WebBrowser is not null) WebBrowser.Paint -= CefOnPaint;
             _cefPaintProcess?.Dispose();
         }
-        static public void DisposeWebTexture() { _webTexture?.Dispose(); }
+        static public void DisposeWebTexture() { _webTexture?.Dispose(); _webTexture = null; }
         static CefEventFlags GetCurrentKeyboardModifiers()
         {
             var cefModifiers = CefEventFlags.None;

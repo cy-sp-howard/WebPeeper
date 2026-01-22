@@ -222,7 +222,8 @@ namespace BhModule.WebPeeper
         protected override void DisposeControl()
         {
             WebPainter.DisposeWebTexture();
-            _bg.Dispose(); 
+            _bg.Dispose();
+            _bg = null;
             base.DisposeControl();
         }
     }

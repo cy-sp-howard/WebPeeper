@@ -46,6 +46,7 @@ namespace BhModule.WebPeeper
             WebPeeperModule.BlishHudInstance.Exiting -= OnBlishHudExiting;
             AppDomain.CurrentDomain.AssemblyResolve -= CefSharpCoreRuntimeResolver;
             _webBrowser?.Dispose();
+            _webBrowser = null;
             _inputMethod.Dispose();
         }
         void SetupCefDllPath()
@@ -175,6 +176,7 @@ namespace BhModule.WebPeeper
         void OnBlishHudExiting(object sender, EventArgs e)
         {
             _webBrowser?.Dispose(); // make sure close for restart
+            _webBrowser = null;
         }
         (Stream, string) OnBlishHudSchemeRequested(IRequest request)
         {
