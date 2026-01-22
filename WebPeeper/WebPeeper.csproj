@@ -69,6 +69,11 @@
     <Reference Include="System.Xml.ReaderWriter" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Strings\UIService.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>UIService.resx</DependentUpon>
+    </Compile>
     <Compile Include="Window\BookmarkPanel.cs" />
     <Compile Include="WebPeeperModule.cs" />
     <Compile Include="Window\BrowserWindowView.cs" />
@@ -121,6 +126,15 @@
       <Name>CefHelper</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Strings\UIService.de.resx" />
+    <EmbeddedResource Include="Strings\UIService.es.resx" />
+    <EmbeddedResource Include="Strings\UIService.fr.resx" />
+    <EmbeddedResource Include="Strings\UIService.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>UIService.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <WebPeeperBhmPath>$(OutDir)$(ProjectName).bhm</WebPeeperBhmPath>
@@ -132,6 +146,9 @@
       <RefFiles Include="$(OutDir)ref\**" />
     </ItemGroup>
     <Copy SourceFiles="@(RefFiles)" DestinationFolder="$(TempPath)ref\%(RecursiveDir)" />
+    <Copy SourceFiles="$(OutDir)fr\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)fr\" />
+    <Copy SourceFiles="$(OutDir)es\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)es\" />
+    <Copy SourceFiles="$(OutDir)de\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)de\" />
     <Copy SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(TempPath)" />
     <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)" />
     <Copy SourceFiles="$(OutDir)manifest.json" DestinationFolder="$(TempPath)" />

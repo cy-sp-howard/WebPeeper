@@ -19,21 +19,20 @@ namespace BhModule.WebPeeper.Window
             _createWebPainter = createWebPainter;
             FlowDirection = ControlFlowDirection.SingleTopToBottom;
             CanScroll = true;
-            OuterControlPadding = new(0, 10);
+            _content = new() { Parent = this, };
+            _alwaysHideCheckbox = new()
+            {
+                Text = Strings.UIService.Hide_Warning,
+                Parent = this
+            };
             _acceptBtn = new()
             {
-                Text = "Got It",
+                Text = Strings.UIService.Accept_Warning,
                 Width = 100,
                 Height = 30,
                 Parent = this
             };
             _acceptBtn.Click += delegate { Accept(); };
-            _alwaysHideCheckbox = new()
-            {
-                Text = "Don't show again.",
-                Parent = this
-            };
-            _content = new() { Parent = this, };
         }
         protected override void OnResized(ResizedEventArgs e)
         {
@@ -45,8 +44,9 @@ namespace BhModule.WebPeeper.Window
         {
             base.RecalculateLayout();
             if (_content is null || _acceptBtn is null || _alwaysHideCheckbox is null) return;
+            _content.Left = 15;
             _content.Height = ContentRegion.Height - _acceptBtn.Height - _alwaysHideCheckbox.Height - (int)OuterControlPadding.Y - 1;
-            _content.Width = ContentRegion.Width - 1;
+            _content.Width = ContentRegion.Width - 30;
             _acceptBtn.Left = ContentRegion.Width / 2 - _acceptBtn.Width / 2;
             _alwaysHideCheckbox.Left = ContentRegion.Width / 2 - _alwaysHideCheckbox.Width / 2;
         }
@@ -61,29 +61,23 @@ namespace BhModule.WebPeeper.Window
     }
     public class WarningContent : Control
     {
-        string _line1 = "You are using an OUTDATED Chromium Version.";
-        string _line2 = "DO NOT Browse Untrusted or Security-Sensitive Websites.";
-        string _line3 = "You could BE ATTACKED through known Vulnerabilities.";
+        readonly string _originText = Strings.UIService.Warning;
+        string _text = "";
         BitmapFont _fontSize = Content.DefaultFont32;
-        Rectangle _line1Rect = Rectangle.Empty;
-        Rectangle _line2Rect = Rectangle.Empty;
-        Rectangle _line3Rect = Rectangle.Empty;
+        Rectangle _textRect = Rectangle.Empty;
         const int _gap = 10;
         protected override void OnResized(ResizedEventArgs e)
         {
             base.OnResized(e);
-            _fontSize = Width > 300 ? Content.DefaultFont32 : Content.DefaultFont18;
-            SetLineRect(ref _line1, ref _line1Rect, Rectangle.Empty);
-            SetLineRect(ref _line2, ref _line2Rect, _line1Rect);
-            SetLineRect(ref _line3, ref _line3Rect, _line2Rect);
-            if (Height < _line3Rect.Bottom) { Height = _line3Rect.Bottom; }
-            else if (Height > _line3Rect.Bottom)
+            _fontSize = Width > 500 ? Content.DefaultFont32 : Content.DefaultFont18;
+            _text = CalculateText(_originText, ref _textRect, Rectangle.Empty);
+            var minHeight = _textRect.Bottom + 30;
+            if (Height < minHeight) { Height = minHeight; }
+            else if (Height > minHeight)
             {
-                var offsetY = Height / 3 - _line3Rect.Bottom / 2;
+                var offsetY = Height / 3 - _textRect.Bottom / 2;
                 if (offsetY <= 0) return;
-                _line1Rect.Y += offsetY;
-                _line2Rect.Y += offsetY;
-                _line3Rect.Y += offsetY;
+                _textRect.Y += offsetY;
             }
         }
         public override void DoUpdate(GameTime gameTime)
@@ -92,19 +86,20 @@ namespace BhModule.WebPeeper.Window
         }
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {
-            spriteBatch.DrawStringOnCtrl(this, _line1, _fontSize, _line1Rect, Color.Red);
-            spriteBatch.DrawStringOnCtrl(this, _line2, _fontSize, _line2Rect, Color.Red);
-            spriteBatch.DrawStringOnCtrl(this, _line3, _fontSize, _line3Rect, Color.Red);
+            spriteBatch.DrawStringOnCtrl(this, _text, _fontSize, _textRect, Color.Red);
         }
-        void SetLineRect(ref string text, ref Rectangle rect, Rectangle prevTextRect)
+        string CalculateText(string text, ref Rectangle rect, Rectangle prevTextRect)
         {
+            var edgeFix = _fontSize == Content.DefaultFont32 ? 80 : 0;
             rect.Width = Width;
             rect.Y = _gap + prevTextRect.Bottom;
-            text = DrawUtil.WrapText(_fontSize, text.Replace("\n", ""), rect.Width - 20).Trim();
-            var size = _fontSize.MeasureString(text);
+            var result = DrawUtil.WrapText(_fontSize, text, rect.Width - edgeFix).Trim();
+            var originSize = _fontSize.MeasureString(text);
+            var size = _fontSize.MeasureString(result);
             rect.Height = (int)size.Height;
-            if (!text.Contains("\n")) { rect.X = Width / 2 - (int)(size.Width / 2); }
+            if (originSize == size) { rect.X = Width / 2 - (int)(size.Width / 2); }
             else rect.X = 0;
+            return result;
         }
     }
 }
