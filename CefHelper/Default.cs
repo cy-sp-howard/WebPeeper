@@ -27,7 +27,7 @@ namespace CefHelper
             Action<bool> fullscreenModeChangeAction
             )
         {
-            browser.DisplayHandler = new DdddHandler()
+            browser.DisplayHandler = new FullscreenHandler()
             {
                 FullscreenModeChange = fullscreenModeChangeAction,
             };
@@ -55,7 +55,7 @@ namespace CefHelper
             return ResourceHandler.FromStream(stream, mimeTtype, true);
         }
     }
-    class DdddHandler : DisplayHandler
+    class FullscreenHandler : DisplayHandler
     {
         public Action<bool> FullscreenModeChange;
         protected override void OnFullscreenModeChange(IWebBrowser chromiumWebBrowser, IBrowser browser, bool fullscreen)
