@@ -4,6 +4,7 @@ using Blish_HUD.Graphics.UI;
 using Blish_HUD.Input;
 using Blish_HUD.Settings;
 using Blish_HUD.Settings.UI.Views;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -83,7 +84,7 @@ namespace BhModule.WebPeeper
             WebWindowOpacity.SetRange(0.1f, 1f);
             WebWindowOpacity.SettingChanged += (sender, e) =>
             {
-                var uiService = WebPeeperModule.Instance.UIService;
+                var uiService = WebPeeperModule.Instance.UiService;
                 if (uiService is not null && uiService.BrowserWindow.Opacity > 0)
                 {
                     uiService.BrowserWindow.Opacity = e.NewValue;
@@ -116,27 +117,27 @@ namespace BhModule.WebPeeper
         }
         void ToggleSettings(object sender, EventArgs e)
         {
-            WebPeeperModule.Instance.UIService?.ToggleSettings();
+            WebPeeperModule.Instance.UiService?.ToggleSettings();
         }
         void ToggleWebWindow(object sender, EventArgs e)
         {
-            WebPeeperModule.Instance.UIService?.ToggleBrowser();
+            WebPeeperModule.Instance.UiService?.ToggleBrowser();
         }
         void FocusBHWindow(object sender, EventArgs e)
         {
-            if (WebPeeperModule.Instance.UIService?.BrowserWindow?.Visible == false) return;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == false) return;
             Utils.SetForegroundWindow(WebPeeperModule.BlishHudInstance.FormHandle);
-            WebPeeperModule.Instance.CefService?.FocusBlurredElement();
+            Browser.FocusBlurredElement();
         }
         void ZoomInWeb(object sender, EventArgs e)
         {
-            if (WebPainter.Instance is null || !WebPainter.Instance.MouseOver) return;
-            WebPainter.Instance.Zoom(1);
+            if (WebPainter.Instance?.MouseOver != true) return;
+            Browser.Zoom(1);
         }
         void ZoomOutWeb(object sender, EventArgs e)
         {
-            if (WebPainter.Instance is null || !WebPainter.Instance.MouseOver) return;
-            WebPainter.Instance.Zoom(-1);
+            if (WebPainter.Instance?.MouseOver != true) return;
+            Browser.Zoom(-1);
         }
     }
     // SettingsView never call Unload, so cannot bind event (v1.2.0).

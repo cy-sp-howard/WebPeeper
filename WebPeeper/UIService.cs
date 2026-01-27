@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace BhModule.WebPeeper
 {
-    public class UIService
+    public class UiService
     {
         private CornerIcon _browserCornerIcon;
         private BrowserWindow _browserWindow;
@@ -61,9 +61,6 @@ namespace BhModule.WebPeeper
             var disposeBrowser = new ContextMenuStripItem("Quit Process");
             disposeBrowser.Click += delegate { WebPeeperModule.Instance.CefService.CloseWebBrowser(); };
             yield return disposeBrowser;
-
         }
-
-
     }
 }

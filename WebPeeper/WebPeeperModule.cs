@@ -22,7 +22,8 @@ namespace BhModule.WebPeeper
         internal Gw2ApiManager Gw2ApiManager => this.ModuleParameters.Gw2ApiManager;
         #endregion
         public CefService CefService { get; private set; }
-        public UIService UIService { get; private set; }
+        public ImeService ImeService { get; private set; }
+        public UiService UiService { get; private set; }
         public ModuleSettings Settings { get; private set; }
         public static BlishHud BlishHudInstance;
         public static MenuItem InstanceSettingsMenuItem;
@@ -53,22 +54,25 @@ namespace BhModule.WebPeeper
                 {
                     return ((MenuItem)i).Text == InstanceModuleManager.Manifest.Name;
                 }) as MenuItem;
+
+            ImeService = new ImeService(BlishHudInstance.FormHandle);
             CefService = new CefService();
-            UIService = new UIService();
+            UiService = new UiService();
         }
         protected override async Task LoadAsync()
         {
             await Task.Run(() =>
             {
                 CefService.Load();
-                UIService.Load();
+                UiService.Load();
             });
         }
         protected override void Unload()
         {
             Settings?.Unload();
+            ImeService?.Unload();
             CefService?.Unload();
-            UIService?.Unload();
+            UiService?.Unload();
         }
     }
 

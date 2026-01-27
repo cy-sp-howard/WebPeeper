@@ -1,5 +1,6 @@
 ﻿using Blish_HUD;
 using Blish_HUD.Controls;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended.BitmapFonts;
@@ -38,7 +39,7 @@ namespace BhModule.WebPeeper.Window
         {
             base.OnResized(e);
             RecalculateLayout();
-            WebPeeperModule.Instance.CefService.SetBrowserSize(Width, Height);
+            Browser.SetBrowserSize(Width, Height);
         }
         public override void RecalculateLayout()
         {

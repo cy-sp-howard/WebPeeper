@@ -1,9 +1,7 @@
 ﻿using Blish_HUD;
 using Blish_HUD.Controls;
 using Blish_HUD.Input;
-using CefSharp;
-using CefSharp.Enums;
-using CefSharp.OffScreen;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -26,7 +24,6 @@ namespace BhModule.WebPeeper
         Rectangle _webTextureRect = Rectangle.Empty;
         CefService CefService => WebPeeperModule.Instance.CefService;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
-        ChromiumWebBrowser WebBrowser => CefService.WebBrowser;
         bool _isLeftMouseButtonPressed = false;
         bool _isRightMouseButtonPressed = false;
         static bool _isError = false;
@@ -41,128 +38,52 @@ namespace BhModule.WebPeeper
         public WebPainter()
         {
             Instance = this;
-            if (WebBrowser is not null) WebBrowser.Paint += CefOnPaint;
+            Browser.Paint += CefOnPaint;
             GameService.Input.Keyboard.KeyStateChanged += KeyboardHandler;
             ApplyBgTexture();
             if (_webTexture is null) CefService.GetScreenshot().ContinueWith(t =>
             {
-                if (_webTexture is not null) return;
+                if (_webTexture is not null)
+                {
+                    t.Result?.Dispose();
+                    return;
+                }
                 _webTexture = t.Result;
             });
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
-            if (WebBrowser is not null && WebBrowser.IsBrowserInitialized && !Disabled)
+            if (!Disabled)
             {
-                var isUseTouch = Settings.IsUseTouch.Value;
-                var borwserHost = WebBrowser.GetBrowserHost();
                 var ctrlPos = ms.Position - AbsoluteBounds.Location;
-                CefEventFlags mouseEvtFlag = GetCurrentKeyboardModifiers();
-                if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEventFlags.LeftMouseButton;
-                else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEventFlags.RightMouseButton;
-
-                if (mouseEventType == MouseEventType.MouseMoved)
+                var mouseEvtFlag = GetCurrentKeyboardModifiers();
+                if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
+                else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
+                if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
                 {
-                    if (isUseTouch && _isLeftMouseButtonPressed)
-                    {
-                        CefSharp.Structs.TouchEvent touchEvt = new()
-                        {
-                            Id = 1,
-                            X = (float)ctrlPos.X,
-                            Y = (float)ctrlPos.Y,
-                            PointerType = PointerType.Touch,
-                            Pressure = 1,
-                            Type = TouchEventType.Moved,
-                            Modifiers = mouseEvtFlag,
-                        };
-                        borwserHost.SendTouchEvent(touchEvt);
-                    }
-                    else
-                    {
-                        MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                        borwserHost.SendMouseMoveEvent(mouseEvt, false);
-                    }
-                }
-                else if (mouseEventType == MouseEventType.MouseWheelScrolled)
-                {
-                    MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                    var wheelValue = ms.ScrollWheelValue < -1000 ? 240 : ms.ScrollWheelValue;
-                    if (mouseEvtFlag.HasFlag(CefEventFlags.ControlDown) && !mouseEvtFlag.HasFlag(CefEventFlags.AltDown) && !mouseEvtFlag.HasFlag(CefEventFlags.ShiftDown))
-                    {
-                        Zoom(wheelValue > 0 ? 1 : -1);
-                    }
-                    else
-                    {
-                        borwserHost.SendMouseWheelEvent(mouseEvt, 0, wheelValue);
-                    }
-                }
-                else if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
-                {
-                    borwserHost.SendFocusEvent(true);
-                    if (isUseTouch)
-                    {
-                        CefSharp.Structs.TouchEvent touchEvt = new()
-                        {
-                            Id = 1,
-                            X = (float)ctrlPos.X,
-                            Y = (float)ctrlPos.Y,
-                            PointerType = PointerType.Touch,
-                            Pressure = 1,
-                            Type = TouchEventType.Pressed,
-                            Modifiers = mouseEvtFlag,
-                        };
-                        borwserHost.SendTouchEvent(touchEvt);
-                    }
-                    else
-                    {
-                        MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                        borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Left, false, 0);
-                    }
                     _isLeftMouseButtonPressed = true;
                 }
                 else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
                 {
-                    borwserHost.SendFocusEvent(true);
-                    MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                    borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, false, 0);
                     _isRightMouseButtonPressed = true;
                 }
                 else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
                 {
-                    if (isUseTouch)
-                    {
-                        CefSharp.Structs.TouchEvent touchEvt = new()
-                        {
-                            Id = 1,
-                            X = (float)ctrlPos.X,
-                            Y = (float)ctrlPos.Y,
-                            PointerType = PointerType.Touch,
-                            Pressure = 1,
-                            Type = TouchEventType.Released,
-                            Modifiers = mouseEvtFlag,
-                        };
-                        borwserHost.SendTouchEvent(touchEvt);
-                    }
-                    else
-                    {
-                        MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                        borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Left, _isLeftMouseButtonPressed, 0);
-                    }
                     _isLeftMouseButtonPressed = false;
                 }
                 else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
                 {
-                    MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                    borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, _isRightMouseButtonPressed, 0);
                     _isRightMouseButtonPressed = false;
                 }
+                Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
+
             }
             return base.TriggerMouseInput(mouseEventType, ms);
         }
         protected override void OnResized(ResizedEventArgs e)
         {
             _webTextureRect.Size = Size;
-            CefService.SetBrowserSize(Width, Height);
+            Browser.SetBrowserSize(Width, Height);
             SetErrorTextureRect();
             base.OnResized(e);
         }
@@ -183,30 +104,30 @@ namespace BhModule.WebPeeper
                 spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect);
             }
         }
-        void CefOnPaint(object sender, OnPaintEventArgs e)
+        bool CefOnPaint(IntPtr bufferHandle, int width, int height)
         {
-            e.Handled = true;
-            if (!WebPeeperModule.Instance.UIService.BrowserWindow.Visible) return;
-            var bufferSize = e.Width * e.Height * sizeof(int);
+            if (!WebPeeperModule.Instance.UiService.BrowserWindow.Visible) return true;
+            var bufferSize = width * height * sizeof(int);
             if (bufferSize != _webTextureBufferBytes.Length)
             {
                 _webTextureBufferBytes = new byte[bufferSize];
             }
             _cefPaintProcess ??= Process.GetCurrentProcess();
-            Utils.ReadProcessMemory(_cefPaintProcess.Handle, e.BufferHandle, _webTextureBufferBytes, bufferSize, out _);
-            if (_webTexture is null || _webTexture.Format != SurfaceFormat.Bgra32 || _webTexture.Width != e.Width || _webTexture.Height != e.Height)
+            Utils.ReadProcessMemory(_cefPaintProcess.Handle, bufferHandle, _webTextureBufferBytes, bufferSize, out _);
+            if (_webTexture is null || _webTexture.Format != SurfaceFormat.Bgra32 || _webTexture.Width != width || _webTexture.Height != height)
             {
                 DisposeWebTexture();
                 using var ctx = Graphics.LendGraphicsDeviceContext();
                 _webTexture = new Texture2D(
                          ctx.GraphicsDevice,
-                         e.Width,
-                         e.Height,
+                         width,
+                         height,
                          false,
                          SurfaceFormat.Bgra32
                          );
             }
             _webTexture.SetData(_webTextureBufferBytes);
+            return true;
         }
         public void SetErrorState(bool state)
         {
@@ -226,53 +147,52 @@ namespace BhModule.WebPeeper
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {
-            if (WebBrowser is null || !WebBrowser.IsBrowserInitialized || !_mouseOver || WebPeeperModule.BlishHudInstance.Form.Focused) return;
-            var keyEvt = new KeyEvent
+            if (!_mouseOver || WebPeeperModule.BlishHudInstance.Form.Focused) return;
+            var isKeyDown = e.EventType == KeyboardEventType.KeyDown;
+            var key = e.Key switch
             {
-                Modifiers = GetCurrentKeyboardModifiers(),
-                Type = e.EventType == KeyboardEventType.KeyDown ? KeyEventType.KeyDown : KeyEventType.KeyUp,
-                WindowsKeyCode = e.Key switch
-                {
-                    Keys.LeftAlt or Keys.RightAlt => (int)VK.MENU,
-                    Keys.LeftControl or Keys.RightControl => (int)VK.CONTROL,
-                    Keys.LeftShift or Keys.RightShift => (int)VK.SHIFT,
-                    _ => (int)e.Key,
-                }
+                Keys.LeftAlt or Keys.RightAlt => (int)VK.MENU,
+                Keys.LeftControl or Keys.RightControl => (int)VK.CONTROL,
+                Keys.LeftShift or Keys.RightShift => (int)VK.SHIFT,
+                _ => (int)e.Key,
             };
-            WebBrowser.GetBrowserHost().SendKeyEvent(keyEvt);
-        }
-        public void Zoom(float rate)
-        {
-            if (WebBrowser is null) return;
-            var getLevelTask = WebBrowser.GetZoomLevelAsync();
-            getLevelTask.Wait(TimeSpan.FromSeconds(1));
-            if (getLevelTask.IsCanceled) return;
-            WebBrowser.SetZoomLevel(getLevelTask.Result + 0.2f * rate);
+            Browser.SendKeyEvent((int)GetCurrentKeyboardModifiers(), isKeyDown, key);
         }
         protected override void DisposeControl()
         {
             GameService.Input.Keyboard.KeyStateChanged -= KeyboardHandler;
-            if (WebBrowser is not null) WebBrowser.Paint -= CefOnPaint;
+            Browser.Paint -= CefOnPaint;
             _cefPaintProcess?.Dispose();
         }
         static public void DisposeWebTexture() { _webTexture?.Dispose(); _webTexture = null; }
-        static CefEventFlags GetCurrentKeyboardModifiers()
+        static CefEvtModifiresFlags GetCurrentKeyboardModifiers()
         {
-            var cefModifiers = CefEventFlags.None;
+            var cefModifiers = CefEvtModifiresFlags.None;
             var monoModifiers = GameService.Input.Keyboard.ActiveModifiers;
             if (monoModifiers.HasFlag(ModifierKeys.Ctrl))
             {
-                cefModifiers |= CefEventFlags.ControlDown;
+                cefModifiers |= CefEvtModifiresFlags.ControlDown;
             }
             if (monoModifiers.HasFlag(ModifierKeys.Alt))
             {
-                cefModifiers |= CefEventFlags.AltDown;
+                cefModifiers |= CefEvtModifiresFlags.AltDown;
             }
             if (monoModifiers.HasFlag(ModifierKeys.Shift))
             {
-                cefModifiers |= CefEventFlags.ShiftDown;
+                cefModifiers |= CefEvtModifiresFlags.ShiftDown;
             }
             return cefModifiers;
+        }
+        enum CefEvtModifiresFlags : uint
+        {
+            None = 0u,
+            CapsLockOn = 1u,
+            ShiftDown = 2u,
+            ControlDown = 4u,
+            AltDown = 8u,
+            LeftMouseButton = 0x10u,
+            MiddleMouseButton = 0x20u,
+            RightMouseButton = 0x40u,
         }
     }
 }

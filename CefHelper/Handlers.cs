@@ -1,49 +1,10 @@
 ﻿using CefSharp;
 using CefSharp.Handler;
-using CefSharp.OffScreen;
 using System;
 using System.IO;
 
 namespace CefHelper
 {
-    static public class Default
-    {
-        const string SchemeName = "blish-hud";
-        const string DomainName = "web-peeper";
-        static public void SetCefSchemeHandler(CefSettings settings, Func<IRequest, (Stream, string)> blishHudSchemeRequested)
-        {
-            settings.RegisterScheme(new CefCustomScheme()
-            {
-                SchemeName = SchemeName,
-                DomainName = DomainName,
-                SchemeHandlerFactory = new CefSchemeHandlerFactory() { BlishHudSchemeRequested = blishHudSchemeRequested },
-            });
-        }
-        static public void SetBrowserHandlers(
-            IWebBrowser browser,
-            Action<IFrame> contextCreatedAction,
-            Action<IDomNode> focusNodeChangedAction,
-            Action mainFrameChangedAction,
-            Action<bool> fullscreenModeChangeAction
-            )
-        {
-            browser.DisplayHandler = new FullscreenHandler()
-            {
-                FullscreenModeChange = fullscreenModeChangeAction,
-            };
-            browser.FrameHandler = new WebUnloadHandler()
-            {
-                MainFrameChanged = mainFrameChangedAction
-            };
-            browser.RequestHandler = new WebFocusHandler();
-            browser.LifeSpanHandler = new PopupHandler();
-            browser.RenderProcessMessageHandler = new NodeFocusHandler()
-            {
-                FocusNodeChanged = focusNodeChangedAction,
-                ContextCreated = contextCreatedAction,
-            };
-        }
-    }
     public class CefSchemeHandlerFactory : ISchemeHandlerFactory
     {
         public Func<IRequest, (Stream, string)> BlishHudSchemeRequested;
@@ -57,10 +18,10 @@ namespace CefHelper
     }
     class FullscreenHandler : DisplayHandler
     {
-        public Action<bool> FullscreenModeChange;
+        public Action<bool> FullscreenModeChanged;
         protected override void OnFullscreenModeChange(IWebBrowser chromiumWebBrowser, IBrowser browser, bool fullscreen)
         {
-            FullscreenModeChange?.Invoke(fullscreen);
+            FullscreenModeChanged?.Invoke(fullscreen);
         }
     }
     class WebFocusHandler : RequestHandler
