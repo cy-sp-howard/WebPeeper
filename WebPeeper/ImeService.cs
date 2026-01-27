@@ -83,6 +83,7 @@ namespace BhModule.WebPeeper
         }
         void OnHudLostFocus(object sender, EventArgs e)
         {
+            if (Browser.WebBrowser is null) return;
             Browser.BlurInput();
         }
         void SetCefComposition()

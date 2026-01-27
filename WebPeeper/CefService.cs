@@ -130,6 +130,7 @@ namespace BhModule.WebPeeper
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
+            if (Browser.WebBrowser is null) return;
             Browser.Dispose(); // make sure close for restart\
         }
         Stream OnBlishHudSchemeRequested(string filePath)
