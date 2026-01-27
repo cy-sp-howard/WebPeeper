@@ -153,6 +153,7 @@ namespace BhModule.WebPeeper
         }
         protected override void OnHidden(EventArgs e)
         {
+            if (Browser.WebBrowser is null) return;
             Browser.BlurInput();
             if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
             else if (Settings.IsAutoPauseWeb.Value)
