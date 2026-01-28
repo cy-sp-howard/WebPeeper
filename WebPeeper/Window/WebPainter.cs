@@ -53,32 +53,20 @@ namespace BhModule.WebPeeper
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
-            if (!Disabled)
-            {
-                var ctrlPos = ms.Position - AbsoluteBounds.Location;
-                var mouseEvtFlag = GetCurrentKeyboardModifiers();
-                if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
-                else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
-                if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
-                {
-                    _isLeftMouseButtonPressed = true;
-                }
-                else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
-                {
-                    _isRightMouseButtonPressed = true;
-                }
-                else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
-                {
-                    _isLeftMouseButtonPressed = false;
-                }
-                else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
-                {
-                    _isRightMouseButtonPressed = false;
-                }
-                Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
-
-            }
+            if (!Disabled) { MouseHandler(mouseEventType, ms); }
             return base.TriggerMouseInput(mouseEventType, ms);
+        }
+        protected override void OnMouseLeft(MouseEventArgs e)
+        {
+            if(_isLeftMouseButtonPressed)
+            {
+                MouseHandler(MouseEventType.LeftMouseButtonReleased, GameService.Input.Mouse.State);
+            }
+            if (_isRightMouseButtonPressed)
+            {
+                MouseHandler(MouseEventType.RightMouseButtonReleased, GameService.Input.Mouse.State);
+            }
+            base.OnMouseLeft(e);
         }
         protected override void OnResized(ResizedEventArgs e)
         {
@@ -144,6 +132,30 @@ namespace BhModule.WebPeeper
             _errorTextureRect = new(0, Size.Y - errTextureSize, errTextureSize, errTextureSize);
             var quesTextureSize = (int)(errTextureSize * 0.2);
             _questionTextureRect = new((int)(errTextureSize * 0.7), Size.Y - (int)(errTextureSize * 1.05), quesTextureSize, quesTextureSize);
+        }
+        void MouseHandler(MouseEventType mouseEventType, MouseState ms)
+        {
+            var ctrlPos = ms.Position - AbsoluteBounds.Location;
+            var mouseEvtFlag = GetCurrentKeyboardModifiers();
+            if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
+            else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
+            if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
+            {
+                _isLeftMouseButtonPressed = true;
+            }
+            else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
+            {
+                _isRightMouseButtonPressed = true;
+            }
+            else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
+            {
+                _isLeftMouseButtonPressed = false;
+            }
+            else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
+            {
+                _isRightMouseButtonPressed = false;
+            }
+            Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {
