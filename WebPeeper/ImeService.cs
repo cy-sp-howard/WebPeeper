@@ -42,7 +42,7 @@ namespace BhModule.WebPeeper
         }
         protected override void WndProc(ref Message m)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true)
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true && Browser.Ready)
             {
                 _m = m;
                 switch ((WM)_m.Msg)
@@ -83,11 +83,12 @@ namespace BhModule.WebPeeper
         }
         void OnHudLostFocus(object sender, EventArgs e)
         {
-            if (Browser.WebBrowser is null) return;
+            if (!Browser.Ready) return;
             Browser.BlurInput();
         }
         void SetCefComposition()
         {
+            if(!Browser.Ready) return;
             if (GetCompositionText(GCS.RESULTSTR, out string text))
             {
                 Browser.ImeCommitText(text);
@@ -115,7 +116,7 @@ namespace BhModule.WebPeeper
         }
         void SetCompositionPostion()
         {
-            if (WebPainter.Instance is null) return;
+            if (WebPainter.Instance is null || !Browser.Ready) return;
             var x = WebPainter.Instance.LocationAtForm.X;
             var y = WebPainter.Instance.LocationAtForm.Y;
 

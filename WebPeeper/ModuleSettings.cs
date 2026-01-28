@@ -125,18 +125,18 @@ namespace BhModule.WebPeeper
         }
         void FocusBHWindow(object sender, EventArgs e)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == false) return;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !Browser.Ready) return;
             Utils.SetForegroundWindow(WebPeeperModule.BlishHudInstance.FormHandle);
             Browser.FocusBlurredElement();
         }
         void ZoomInWeb(object sender, EventArgs e)
         {
-            if (WebPainter.Instance?.MouseOver != true) return;
+            if (WebPainter.Instance?.MouseOver != true || !Browser.Ready) return;
             Browser.Zoom(1);
         }
         void ZoomOutWeb(object sender, EventArgs e)
         {
-            if (WebPainter.Instance?.MouseOver != true) return;
+            if (WebPainter.Instance?.MouseOver != true || !Browser.Ready) return;
             Browser.Zoom(-1);
         }
     }

@@ -17,10 +17,10 @@ namespace CefHelper
 
         const string SchemeName = "blish-hud";
         const string DomainName = "web-peeper";
-        static public bool CanGoBack => BrowserWrapper.Browser?.CanGoBack == true;
-        static public bool CanGoForward => BrowserWrapper.Browser?.CanGoForward == true;
-        static public string Address => string.IsNullOrWhiteSpace(BrowserWrapper.Browser?.Address) ? "" : BrowserWrapper.Browser.Address;
-        static public bool IsLoading => BrowserWrapper.Browser?.IsLoading == true;
+        static public bool CanGoBack => _webBrowser?.CanGoBack == true;
+        static public bool CanGoForward => _webBrowser?.CanGoForward == true;
+        static public string Address => string.IsNullOrWhiteSpace(_webBrowser?.Address) ? "" : _webBrowser.Address;
+        static public bool IsLoading => _webBrowser?.IsLoading == true;
         static public string ContextCreatedScript = "";
         static public event Func<string, Stream> BlishHudSchemeRequested;
         static public event Action<bool> FocusedChanged;
@@ -31,8 +31,9 @@ namespace CefHelper
         static public event Action<bool, bool, bool> LoadingStateChanged;
         static public event Action<string> AddressChanged;
         static public event Func<IntPtr, int, int, bool> Paint;
-        static public Wrapper BrowserWrapper = new();
-        static public dynamic WebBrowser { get; private set; }
+        static ChromiumWebBrowser _webBrowser;
+        static public bool Created { get; private set; } = false;
+        static public bool Ready { get; private set; } = false;
         static public void CefSettingInit(string defaultUserAgent, string localesPath, string settingPath, string subprocessPath, bool clearUserData)
         {
             if (Cef.IsInitialized) return;
@@ -70,40 +71,39 @@ namespace CefHelper
         static public Task<bool> Create(string defaultUrl, int frameRate)
         {
             var tcs = new TaskCompletionSource<bool>();
-            if (WebBrowser == null || BrowserWrapper.Browser.IsDisposed)
+            if (_webBrowser is null || _webBrowser.IsDisposed)
             {
                 var browserSetting = new BrowserSettings(true)
                 {
                     WindowlessFrameRate = frameRate
                 };
 
-                BrowserWrapper.Create(defaultUrl, browserSetting);
-                var webBrowser = BrowserWrapper.Browser;
-                WebBrowser = webBrowser;
-                BrowserWrapper.Browser.BrowserInitialized += delegate { tcs.TrySetResult(true); };
-                BrowserWrapper.Browser.LoadingStateChanged += (s, e) =>
+                _webBrowser = new ChromiumWebBrowser(defaultUrl, browserSetting);
+                Created = true;
+                _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); Ready = true; };
+                _webBrowser.LoadingStateChanged += (s, e) =>
                 {
                     LoadingStateChanged?.Invoke(e.CanGoBack, e.CanGoForward, e.IsLoading);
                 };
-                BrowserWrapper.Browser.AddressChanged += (s, e) => { AddressChanged?.Invoke(e.Address); };
-                BrowserWrapper.Browser.TitleChanged += (s, e) => { TitleChanged?.Invoke(e.Title); };
-                BrowserWrapper.Browser.FrameLoadStart += (s, e) => { FrameLoadStart?.Invoke(); };
-                BrowserWrapper.Browser.LoadError += (s, e) => { UrlLoadError?.Invoke(e.FailedUrl); };
-                BrowserWrapper.Browser.Paint += (s, e) =>
+                _webBrowser.AddressChanged += (s, e) => { AddressChanged?.Invoke(e.Address); };
+                _webBrowser.TitleChanged += (s, e) => { TitleChanged?.Invoke(e.Title); };
+                _webBrowser.FrameLoadStart += (s, e) => { FrameLoadStart?.Invoke(); };
+                _webBrowser.LoadError += (s, e) => { UrlLoadError?.Invoke(e.FailedUrl); };
+                _webBrowser.Paint += (s, e) =>
                 {
                     e.Handled = Paint?.Invoke(e.BufferHandle, e.Width, e.Height) == true;
                 };
-                BrowserWrapper.Browser.DisplayHandler = new FullscreenHandler()
+                _webBrowser.DisplayHandler = new FullscreenHandler()
                 {
                     FullscreenModeChanged = (isFullscreen) => { FullscreenModeChanged?.Invoke(isFullscreen); },
                 };
-                BrowserWrapper.Browser.FrameHandler = new WebUnloadHandler()
+                _webBrowser.FrameHandler = new WebUnloadHandler()
                 {
                     MainFrameChanged = () => { FocusedChanged?.Invoke(false); }
                 };
-                BrowserWrapper.Browser.RequestHandler = new WebFocusHandler();
-                BrowserWrapper.Browser.LifeSpanHandler = new PopupHandler();
-                BrowserWrapper.Browser.RenderProcessMessageHandler = new NodeFocusHandler()
+                _webBrowser.RequestHandler = new WebFocusHandler();
+                _webBrowser.LifeSpanHandler = new PopupHandler();
+                _webBrowser.RenderProcessMessageHandler = new NodeFocusHandler()
                 {
                     FocusNodeChanged = (node) =>
                     {
@@ -117,72 +117,61 @@ namespace CefHelper
                     },
                     ContextCreated = (frame) =>
                     {
-                        if (string.IsNullOrWhiteSpace(ContextCreatedScript) || BrowserWrapper.Browser?.CanExecuteJavascriptInMainFrame != true) return;
+                        if (string.IsNullOrWhiteSpace(ContextCreatedScript) || _webBrowser.CanExecuteJavascriptInMainFrame != true) return;
                         frame.ExecuteJavaScriptAsync(ContextCreatedScript);
                     }
                 };
             }
-            if (BrowserWrapper.Browser.IsBrowserInitialized) tcs.TrySetResult(true);
+            if (_webBrowser.IsBrowserInitialized) tcs.TrySetResult(true);
             return tcs.Task;
         }
         static public void Close()
         {
-            BrowserWrapper.Browser?.Dispose();
-            WebBrowser = null;
+            Ready = false;
+            Created = false;
+            _webBrowser?.Dispose();
+            _webBrowser = null;
         }
         static public void Back()
         {
-            BrowserWrapper.Browser?.Back();
+            _webBrowser?.Back();
         }
         static public void Forward()
         {
-            BrowserWrapper.Browser?.Forward();
+            _webBrowser?.Forward();
         }
         static public void LoadUrlAsync(string url)
         {
-            BrowserWrapper.Browser?.LoadUrlAsync(url);
+            _webBrowser?.LoadUrlAsync(url);
         }
         static public void WasHidden(bool hidden)
         {
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                BrowserWrapper.Browser?.GetBrowserHost()?.WasHidden(hidden);
-            }
+            _webBrowser?.GetBrowserHost()?.WasHidden(hidden);
         }
         static public void FocusBlurredElement()
         {
-            if (BrowserWrapper.Browser?.CanExecuteJavascriptInMainFrame != true) return;
-            BrowserWrapper.Browser.ExecuteScriptAsync("webPeeper_focusBlurredElement()");
+            if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return;
+            _webBrowser.ExecuteScriptAsync("webPeeper_focusBlurredElement()");
         }
         static public void ImeCommitText(string text)
         {
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                BrowserWrapper.Browser?.GetBrowserHost()?.ImeCommitText(text, new(int.MaxValue, int.MaxValue), 0);
-            }
+            _webBrowser?.GetBrowserHost()?.ImeCommitText(text, new(int.MaxValue, int.MaxValue), 0);
         }
         static public void ImeSetComposition(string text, int location, (int, int, uint, uint, bool)[] underlines)
         {
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                BrowserWrapper.Browser?.GetBrowserHost()?.ImeSetComposition(
-                text,
-                [.. underlines.Select(i => new CompositionUnderline(new(i.Item1, i.Item2), i.Item3, i.Item4, i.Item5))],
-                new(int.MaxValue, int.MaxValue),
-                new(location, location));
-            }
+            _webBrowser?.GetBrowserHost()?.ImeSetComposition(
+            text,
+            [.. underlines.Select(i => new CompositionUnderline(new(i.Item1, i.Item2), i.Item3, i.Item4, i.Item5))],
+            new(int.MaxValue, int.MaxValue),
+            new(location, location));
         }
         static public void ImeFinishComposingText()
         {
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                BrowserWrapper.Browser?.GetBrowserHost()?.ImeFinishComposingText(false);
-            }
+            _webBrowser?.GetBrowserHost()?.ImeFinishComposingText(false);
         }
         static public void SendCursorEvent(int x, int y, int scrollWheelValue, MouseEventType mouseEventType, int mouseEvtFlag, bool isUseTouch)
         {
-
-            var host = BrowserWrapper.Browser?.GetBrowserHost();
+            var host = _webBrowser?.GetBrowserHost();
             if (host is null) return;
             var modifiers = (CefEventFlags)mouseEvtFlag;
             var isLeftButtonPressed = modifiers.HasFlag(CefEventFlags.LeftMouseButton);
@@ -278,7 +267,6 @@ namespace CefHelper
                 MouseEvent mouseEvt = new(x, y, modifiers);
                 host.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, isRightButtonPressed, 0);
             }
-
         }
         static public void SendKeyEvent(int modifiers, bool isKeyDown, int key)
         {
@@ -288,9 +276,7 @@ namespace CefHelper
                 Type = isKeyDown ? KeyEventType.KeyDown : KeyEventType.KeyUp,
                 WindowsKeyCode = key
             };
-   
-                BrowserWrapper.Browser?.GetBrowserHost()?.SendKeyEvent(keyEvt);
-            
+            _webBrowser?.GetBrowserHost()?.SendKeyEvent(keyEvt);
         }
         static public void SendKeyEvent(int msg, IntPtr wParam64, IntPtr lParam64)
         {
@@ -300,7 +286,7 @@ namespace CefHelper
             var lParam = lParam64.CastToInt32();
             var evt = new KeyEvent()
             {
-                Modifiers = (CefEventFlags)GetCefKeyboardModifiers(wParam, lParam),
+                Modifiers = GetCefKeyboardModifiers(wParam, lParam),
                 WindowsKeyCode = wParam,
                 NativeKeyCode = lParam,
                 IsSystemKey = false,
@@ -312,11 +298,9 @@ namespace CefHelper
                     _ => (KeyEventType)(-1),
                 }
             };
-          
-                BrowserWrapper.Browser?.GetBrowserHost()?.SendKeyEvent(evt);
-            
+            _webBrowser?.GetBrowserHost()?.SendKeyEvent(evt);
         }
-        static int GetCefKeyboardModifiers(int wParam, int lParam)
+        static CefEventFlags GetCefKeyboardModifiers(int wParam, int lParam)
         {
             CefEventFlags modifiers = 0;
             if (Native.IsKeyDown(VK.SHIFT)) modifiers |= CefEventFlags.ShiftDown;
@@ -382,98 +366,75 @@ namespace CefHelper
                     modifiers |= CefEventFlags.IsRight;
                     break;
             }
-            return (int)modifiers;
+            return modifiers;
         }
         static public Task SetBrowserSize(int w, int h)
         {
-            if (WebBrowser is null) return Task.FromResult(false);
-            return BrowserWrapper.Browser.ResizeAsync(w, h);
+            if (_webBrowser is null) return Task.FromResult(false);
+            return _webBrowser.ResizeAsync(w, h);
         }
         static public void Zoom(float rate)
         {
-          
-                BrowserWrapper.Browser?.GetZoomLevelAsync()?.ContinueWith(t =>
-                {
-                    BrowserWrapper.Browser.SetZoomLevel(t.Result + 0.2f * rate);
-                });
-            
+            _webBrowser?.GetZoomLevelAsync()?.ContinueWith(t =>
+            {
+                _webBrowser?.SetZoomLevel(t.Result + 0.2f * rate);
+            });
         }
         static public Task<bool> GetFullscreenState()
         {
+            if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return Task.FromResult(false);
             var tcs = new TaskCompletionSource<bool>();
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                if (BrowserWrapper.Browser?.CanExecuteJavascriptInMainFrame != true) return Task.FromResult(false);
-
-                BrowserWrapper.Browser.EvaluateScriptAsync("document.fullscreen")?.ContinueWith(t =>
+            _webBrowser.EvaluateScriptAsync("document.fullscreen")?.ContinueWith(t =>
                 {
                     tcs.TrySetResult((bool)t.Result.Result);
                 });
-                Task.Delay(2000).ContinueWith(t => { tcs.TrySetResult(false); });
-            }
-            else { Task.FromResult(false); }
+            Task.Delay(2000).ContinueWith(t => { tcs.TrySetResult(false); });
             return tcs.Task;
         }
         static public Task<(int, int)> GetInputPosition()
         {
+            if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return Task.FromResult((0, 0));
             var tcs = new TaskCompletionSource<(int, int)>();
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                if (BrowserWrapper.Browser?.CanExecuteJavascriptInMainFrame != true) return Task.FromResult((0, 0));
-
-                BrowserWrapper.Browser.EvaluateScriptAsync("webPeeper_getFocusLocation()")?.ContinueWith(t =>
+            _webBrowser.EvaluateScriptAsync("webPeeper_getFocusLocation()")?.ContinueWith(t =>
                 {
                     var inputXY = (List<object>)t.Result.Result;
                     var inputX = (int)inputXY[0] + 2;
                     var inputY = (int)inputXY[1];
                     tcs.TrySetResult((inputX, inputY));
                 });
-                Task.Delay(2000).ContinueWith(t => { tcs.TrySetResult((0, 0)); });
-            }
-            else return Task.FromResult((0, 0));
+            Task.Delay(2000).ContinueWith(t => { tcs.TrySetResult((0, 0)); });
             return tcs.Task;
         }
         static public Task<string> GetMainFrameTitle()
         {
+            if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return Task.FromResult("");
             var tcs = new TaskCompletionSource<string>();
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
+            _webBrowser.EvaluateScriptAsync("document.title")?.ContinueWith(t =>
             {
-                if (BrowserWrapper.Browser?.CanExecuteJavascriptInMainFrame != true) return Task.FromResult("");
-
-                BrowserWrapper.Browser.EvaluateScriptAsync("document.title")?.ContinueWith(t =>
-                {
-                    tcs.TrySetResult((string)t.Result.Result);
-                });
-                Task.Delay(1000).ContinueWith(t => { tcs.TrySetResult(""); });
-
-            }
-            else { Task.FromResult(""); }
+                tcs.TrySetResult((string)t.Result.Result);
+            });
+            Task.Delay(1000).ContinueWith(t => { tcs.TrySetResult(""); });
             return tcs.Task;
         }
         static public void BlurInput()
         {
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                if (BrowserWrapper.Browser?.CanExecuteJavascriptInMainFrame != true) return;
-                BrowserWrapper.Browser?.ExecuteScriptAsync("webPeeper_blur()");
-            }
+            if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return;
+            _webBrowser.ExecuteScriptAsync("webPeeper_blur()");
         }
         static public Task<byte[]> GetScreenshot()
         {
-            if (WebBrowser is null) return Task.FromResult<byte[]>([]);
-            return BrowserWrapper.Browser.CaptureScreenshotAsync();
+            if (_webBrowser is null) return Task.FromResult<byte[]>([]);
+            return _webBrowser.CaptureScreenshotAsync();
         }
         static public void ApplyUserAgent(string agentString)
         {
-            if (WebBrowser is ChromiumWebBrowser webBrowser)
-            {
-                using var devToolsClient = BrowserWrapper.Browser.GetDevToolsClient();
-                devToolsClient.Emulation.SetUserAgentOverrideAsync(agentString);
-            }
+            using var devToolsClient = _webBrowser?.GetDevToolsClient();
+            if (devToolsClient is null) return;
+            devToolsClient.Emulation.SetUserAgentOverrideAsync(agentString);
         }
         static public void Dispose()
         {
-            Close();
+            if (Created) Close();
             BlishHudSchemeRequested = null;
             FocusedChanged = null;
             TitleChanged = null;

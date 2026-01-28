@@ -145,7 +145,7 @@ namespace BhModule.WebPeeper
                 var maxWidth = Parent.Width - 200;
                 if (Width > maxWidth) Width = maxWidth;
             }
-            if (Settings.IsAutoPauseWeb.Value)
+            if (Settings.IsAutoPauseWeb.Value && Browser.Ready)
             {
                 Browser.WasHidden(false);
             }
@@ -153,7 +153,7 @@ namespace BhModule.WebPeeper
         }
         protected override void OnHidden(EventArgs e)
         {
-            if (Browser.WebBrowser is null) return;
+            if (!Browser.Ready) return;
             Browser.BlurInput();
             if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
             else if (Settings.IsAutoPauseWeb.Value)

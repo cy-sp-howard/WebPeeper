@@ -109,6 +109,7 @@ namespace BhModule.WebPeeper
         }
         public Task<Texture2D> GetScreenshot()
         {
+            if(!Browser.Ready) return Task.FromResult<Texture2D>(null);
             return Browser.GetScreenshot().ContinueWith(t =>
             {
                 var bufferSize = t.Result.Length;
@@ -121,16 +122,17 @@ namespace BhModule.WebPeeper
         async public void CloseWebBrowser()
         {
             await WebPeeperModule.Instance.UiService.BrowserWindow.PrepareQuitBrowser();
-            Browser.Close();
+            if(Browser.Created) Browser.Close();
         }
         public void ApplyUserAgent()
         {
+            if(!Browser.Ready) return;
             var agentString = WebPeeperModule.Instance.Settings.IsMobileLayout.Value ? _mobileUserAgent : _defaultUserAgent;
             Browser.ApplyUserAgent(agentString);
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
-            if (Browser.WebBrowser is null) return;
+            if (!Browser.Created) return;
             Browser.Dispose(); // make sure close for restart\
         }
         Stream OnBlishHudSchemeRequested(string filePath)
@@ -168,6 +170,7 @@ namespace BhModule.WebPeeper
                 }
                 else
                 {
+                    if(!Browser.Ready) return;
                     Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
                 }
             }

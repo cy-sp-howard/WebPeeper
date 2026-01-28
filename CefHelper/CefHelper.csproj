@@ -49,7 +49,6 @@
     <Compile Include="Handlers.cs" />
     <Compile Include="Native.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Wrapper.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BlishHUD">
