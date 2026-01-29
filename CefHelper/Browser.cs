@@ -34,13 +34,12 @@ namespace CefHelper
         static ChromiumWebBrowser _webBrowser;
         static public bool Created { get; private set; } = false;
         static public bool Ready { get; private set; } = false;
-        static public void CefSettingInit(string defaultUserAgent, string localesPath, string settingPath, string subprocessPath, bool clearUserData)
+        static public void CefSettingInit(string localesPath, string settingPath, string subprocessPath, bool clearUserData)
         {
             if (Cef.IsInitialized == true) return;
             CefSharpSettings.FocusedNodeChangedEnabled = true;
             var settings = new CefSettings();
             settings.EnableAudio();
-            settings.UserAgent = defaultUserAgent;
             if (!string.IsNullOrEmpty(localesPath)) settings.LocalesDirPath = localesPath;
             settings.BrowserSubprocessPath = Path.Combine(subprocessPath, "CefSharp.BrowserSubprocess.exe");
             settings.CachePath = Path.Combine(settingPath, "CefCache");
@@ -67,7 +66,7 @@ namespace CefHelper
             });
             Cef.Initialize(settings);
         }
-        static public Task<bool> Create(string defaultUrl, int frameRate)
+        static public Task<bool> Create(string defaultUrl, int frameRate, bool isMobile)
         {
             var tcs = new TaskCompletionSource<bool>();
             if (_webBrowser is null || _webBrowser.IsDisposed)
@@ -100,7 +99,7 @@ namespace CefHelper
                 {
                     MainFrameChanged = () => { FocusedChanged?.Invoke(false); }
                 };
-                _webBrowser.RequestHandler = new WebFocusHandler();
+                _webBrowser.RequestHandler = new FocusBrowserAndUserAgentHandler() { IsMobile = isMobile };
                 _webBrowser.LifeSpanHandler = new PopupHandler();
                 _webBrowser.RenderProcessMessageHandler = new NodeFocusHandler()
                 {
@@ -425,11 +424,12 @@ namespace CefHelper
             if (_webBrowser is null) return Task.FromResult<byte[]>([]);
             return _webBrowser.CaptureScreenshotAsync();
         }
-        static public void ApplyUserAgent(string agentString)
+        static public void SetMobileUserAgent(bool mobile)
         {
-            using var devToolsClient = _webBrowser?.GetDevToolsClient();
-            if (devToolsClient is null) return;
-            devToolsClient.Emulation.SetUserAgentOverrideAsync(agentString);
+            if (_webBrowser?.RequestHandler is FocusBrowserAndUserAgentHandler handler)
+            {
+                handler.IsMobile = mobile;
+            }
         }
         static public void Dispose()
         {

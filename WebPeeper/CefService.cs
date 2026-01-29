@@ -16,9 +16,10 @@ namespace BhModule.WebPeeper
         public string LastAddressInputText = "";
         static public string CefSharpDllPath = DirectoryUtil.RegisterDirectory(DirectoryUtil.CachePath, "cefsharp/");
         static public string CefSettingFolder = DirectoryUtil.RegisterDirectory(WebPeeperModule.InstanceModuleManager.Manifest.Name.Replace(" ", "").ToLower());
-        const string _mobileUserAgent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Mobile Safari/537.36";
-        const string _defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36";
         string _cefLocalesPath;
+        Version _loadedCefSharpVersion;
+        readonly Version _suggestionVersion = new("141.0.110");
+        public bool Outdated { get; set; } = true;
         public CefService()
         {
             SetupCefDllPath();
@@ -88,7 +89,8 @@ namespace BhModule.WebPeeper
             // because security policy cannot load "CefSharp.Core.Runtime.dll" from bytes[].
             AppDomain.CurrentDomain.AssemblyResolve += CefSharpCoreRuntimeResolver;
             // load CefSharp.dll by self, prevent system load twice. 
-            Assembly.Load(WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes("CefSharp.dll"), []);
+            _loadedCefSharpVersion = Assembly.Load(WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes("CefSharp.dll"), []).GetName(true).Version;
+            Outdated = _loadedCefSharpVersion < _suggestionVersion;
 
             ExtractFiles([
                 "CefSharp.BrowserSubprocess.Core.dll",
@@ -127,8 +129,7 @@ namespace BhModule.WebPeeper
         public void ApplyUserAgent()
         {
             if(!Browser.Ready) return;
-            var agentString = WebPeeperModule.Instance.Settings.IsMobileLayout.Value ? _mobileUserAgent : _defaultUserAgent;
-            Browser.ApplyUserAgent(agentString);
+            Browser.SetMobileUserAgent(WebPeeperModule.Instance.Settings.IsMobileLayout.Value);
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
@@ -182,9 +183,7 @@ namespace BhModule.WebPeeper
         }
         public Task<bool> CreateWebBrowser()
         {
-            var moduleSettings = WebPeeperModule.Instance.Settings;
             Browser.CefSettingInit(
-                moduleSettings.IsMobileLayout.Value ? _mobileUserAgent : _defaultUserAgent,
                 _cefLocalesPath,
                 CefSettingFolder,
                 CefSharpDllPath,
@@ -200,7 +199,7 @@ namespace BhModule.WebPeeper
                     _ => 60,
                 };
             }
-            return Browser.Create(WebPeeperModule.Instance.Settings.HomeUrl.Value, frameRate);
+            return Browser.Create(WebPeeperModule.Instance.Settings.HomeUrl.Value, frameRate, WebPeeperModule.Instance.Settings.IsMobileLayout.Value);
         }
     }
 }

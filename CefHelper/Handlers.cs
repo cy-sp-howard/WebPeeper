@@ -2,10 +2,11 @@
 using CefSharp.Handler;
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace CefHelper
 {
-    public class CefSchemeHandlerFactory : ISchemeHandlerFactory
+    class CefSchemeHandlerFactory : ISchemeHandlerFactory
     {
         public Func<IRequest, (Stream, string)> BlishHudSchemeRequested;
         public IResourceHandler Create(IBrowser browser, IFrame frame, string schemeName, IRequest request)
@@ -24,12 +25,18 @@ namespace CefHelper
             FullscreenModeChanged?.Invoke(fullscreen);
         }
     }
-    class WebFocusHandler : RequestHandler
+    class FocusBrowserAndUserAgentHandler : RequestHandler
     {
+        public bool IsMobile = false;
+        public string MobileUserAgent = "";
         protected override bool OnBeforeBrowse(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, bool userGesture, bool isRedirect)
         {
             chromiumWebBrowser.GetBrowserHost().SendFocusEvent(true);
             return base.OnBeforeBrowse(chromiumWebBrowser, browser, frame, request, userGesture, isRedirect);
+        }
+        protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
+        {
+            return new UserAgentHandler(IsMobile);
         }
     }
     class WebUnloadHandler : FrameHandler
@@ -68,6 +75,31 @@ namespace CefHelper
             chromiumWebBrowser.Load(targetUrl);
             newBrowser = null;
             return true;
+        }
+    }
+    class UserAgentHandler(bool isMobile) : ResourceRequestHandler
+    {
+        protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, IRequestCallback callback)
+        {
+            if (chromiumWebBrowser.RequestHandler is FocusBrowserAndUserAgentHandler handler)
+            {
+                var mobileUserAgent = handler.MobileUserAgent;
+                if (string.IsNullOrWhiteSpace(mobileUserAgent))
+                {
+                    var platformRegex = new Regex("\\(Windows[^(]*\\)", RegexOptions.IgnoreCase);
+                    var originUserAgent = request.GetHeaderByName("User-Agent");
+                    mobileUserAgent = platformRegex.Replace(originUserAgent, "(Linux; Android 10; K)");
+                    var browserRegex = new Regex("Chrome\\/[\\d.]+", RegexOptions.IgnoreCase);
+                    var match = browserRegex.Match(mobileUserAgent);
+                    mobileUserAgent = mobileUserAgent.Replace(match.Value, $"{match.Value} Mobile");
+                    handler.MobileUserAgent = mobileUserAgent;
+                }
+                if (isMobile && !string.IsNullOrWhiteSpace(mobileUserAgent))
+                {
+                    request.SetHeaderByName("User-Agent", mobileUserAgent, true);
+                }
+            }
+            return base.OnBeforeResourceLoad(chromiumWebBrowser, browser, frame, request, callback);
         }
     }
 }
