@@ -148,14 +148,14 @@
     <Copy SourceFiles="$(OutDir)es\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)es\" />
     <Copy SourceFiles="$(OutDir)de\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)de\" />
     <Copy SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
     <Copy SourceFiles="$(OutDir)manifest.json" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.OffScreen.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.Core.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.Core.Runtime.dll" DestinationFolder="$(TempPath)_\" />
-    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.exe" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.Core.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.OffScreen.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.Core.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.Core.Runtime.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.exe" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.Core.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
     <ZipDirectory SourceDirectory="$(TempPath)" DestinationFile="$(WebPeeperBhmPath)" Overwrite="true" />
     <RemoveDir Directories="$(TempPath)" />
   </Target>
