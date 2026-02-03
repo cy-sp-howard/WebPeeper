@@ -43,7 +43,10 @@ namespace CefHelper
             if (!string.IsNullOrEmpty(localesPath)) settings.LocalesDirPath = localesPath;
             settings.BrowserSubprocessPath = Path.Combine(subprocessPath, "CefSharp.BrowserSubprocess.exe");
             settings.CachePath = Path.Combine(settingPath, "CefCache");
+#if !GREATER_THAN_114
+            // deleted after 114, https://github.com/cefsharp/CefSharp/issues/4518
             settings.UserDataPath = settings.CachePath;
+#endif
             settings.CefCommandLineArgs.Add("gpu-preferences"); // not sure what is it, but gw2 cefhost.exe uses it
             if (clearUserData)
             {

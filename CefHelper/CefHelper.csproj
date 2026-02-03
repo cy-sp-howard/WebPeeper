@@ -3,7 +3,7 @@
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
     <ProjectGuid>{58AF652C-4194-4343-B724-E30A88ABA248}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
@@ -14,23 +14,23 @@
     <Deterministic>true</Deterministic>
     <LangVersion>12</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
+    <!-- https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild-conditions?view=visualstudio#comparing-versions -->
+	  <DefineConstants Condition="'$(CefVersion)' != '' And $(CefVersion) > '114.2.120'">GREATER_THAN_114</DefineConstants>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <OutputPath>bin\Debug\$(CefVersion)\</OutputPath>
+    <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <OutputPath>bin\Release\$(CefVersion)</OutputPath>
+    <DefineConstants>$(DefineConstants);TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -55,9 +55,25 @@
       <Version>1.2.0</Version>
       <ExcludeAssets>build</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="CefSharp.OffScreen">
-      <Version>103.0.90</Version>
-    </PackageReference>
   </ItemGroup>
+  <Choose>
+    <When Condition="'$(CefVersion)' != ''">
+      <ItemGroup>
+        <PackageReference Include="CefSharp.OffScreen">
+          <Version>$(CefVersion)</Version>
+        </PackageReference>
+      </ItemGroup>
+    </When>
+    <Otherwise>
+      <ItemGroup>
+        <PackageReference Include="CefSharp.OffScreen">
+          <Version>103.0.90</Version>
+        </PackageReference>
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
+  <Target Name="AnotherCefVersions" AfterTargets="Build">
+    <Copy Condition="'$(CefVersion)' != ''" SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(CopyDir)$(CefVersion)\" />
+	</Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

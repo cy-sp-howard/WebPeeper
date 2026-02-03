@@ -11,6 +11,7 @@ using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using MonoGame.Extended.TextureAtlases;
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -21,6 +22,7 @@ namespace BhModule.WebPeeper
         const string _defaultSearchUrl = "https://www.google.com/search?q={text} site:wiki.guildwars2.com";
         const string _defaultHomeUrl = "https://wiki.guildwars2.com/";
         const string _defaultBgColor = "#00000000";
+        public SettingEntry<CefAvailableVersion> CefVersion { get; private set; }
         public SettingEntry<KeyBinding> SettingsKey { get; private set; }
         public SettingEntry<KeyBinding> WebWindowKey { get; private set; }
         public SettingEntry<KeyBinding> ZoomInKey { get; private set; }
@@ -44,6 +46,7 @@ namespace BhModule.WebPeeper
         }
         private void InitUISetting(SettingCollection settings)
         {
+            CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => "Need to download additional files, about 200mb. Restart required.");
             SettingsKey = settings.DefineSetting(nameof(SettingsKey), new KeyBinding(ModifierKeys.Ctrl, Keys.F12), () => "Settings Toggle", () => "");
             SettingsKey.Value.Activated += ToggleSettings;
             SettingsKey.Value.Enabled = true;
@@ -160,7 +163,7 @@ namespace BhModule.WebPeeper
                 AutoSizePadding = new Point(0, 15),
                 Parent = buildPanel
             };
-
+            
             foreach (var setting in _settings.Where(s => s.SessionDefined))
             {
                 IView settingView = null;
@@ -187,12 +190,9 @@ namespace BhModule.WebPeeper
                     {
                         UpdateIsAutoPauseWebState = () => { settingViewBool.Presenter.DoUpdateView(); };
                     }
-                    container.Show(settingView); ;
+                    container.Show(settingView);
                 }
             }
-
-            _rootflowPanel.ShowBorder = true;
-            _rootflowPanel.CanCollapse = true;
         }
     }
     public class HexColorSettingView(SettingEntry<string> setting, int definedWidth = -1) : StringSettingView(setting, definedWidth)
@@ -246,5 +246,10 @@ namespace BhModule.WebPeeper
             if (message == "") return;
             spriteBatch.DrawStringOnCtrl(this, message, GameService.Content.DefaultFont14, new Rectangle(0, 0, Width, Height), Color.Red, false, false, 1, HorizontalAlignment.Center, VerticalAlignment.Middle);
         }
+    }
+    public enum CefAvailableVersion
+    {
+        v103,
+        v143
     }
 }

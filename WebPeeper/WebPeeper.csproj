@@ -138,12 +138,20 @@
     <WebPeeperBhmPath>$(OutDir)$(ProjectName).bhm</WebPeeperBhmPath>
     <TempPath>$(OutDir).bhm\</TempPath>
   </PropertyGroup>
+	<Target Name="BuildAnotherCefHelper" BeforeTargets="Build">
+    <ItemGroup>
+      <CefVersions Include="143.0.90" />
+    </ItemGroup>
+		<MSBuild Projects="..\CefHelper\CefHelper.csproj" Properties="CefVersion=%(CefVersions.Identity);CopyDir=$([System.IO.Path]::GetFullPath($(OutDir)))helpers\" Targets="Restore;Build" />
+	</Target>
   <Target Name="BuildWebPeeperModule" AfterTargets="Build">
     <Delete Files="$(WebPeeperBhmPath)" />
     <ItemGroup>
       <RefFiles Include="$(OutDir)ref\**" />
+      <HelperFiles Include="$(OutDir)helpers\**" />
     </ItemGroup>
     <Copy SourceFiles="@(RefFiles)" DestinationFolder="$(TempPath)ref\%(RecursiveDir)" />
+    <Copy SourceFiles="@(HelperFiles)" DestinationFolder="$(TempPath)cef\%(RecursiveDir)" />
     <Copy SourceFiles="$(OutDir)fr\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)fr\" />
     <Copy SourceFiles="$(OutDir)es\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)es\" />
     <Copy SourceFiles="$(OutDir)de\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)de\" />

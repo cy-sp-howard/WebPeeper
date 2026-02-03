@@ -21,13 +21,18 @@ namespace BhModule.WebPeeper
         string _cefFolder;
         string _cefSharpFolder;
         string _cefSharpBhmPath;
-        readonly Version _suggestionVersion = new("143.0.90");
-        readonly Version _defaultVersion = new("103.0.90");
-        readonly Version _currentVersion = new("103.0.90");
+        static readonly Dictionary<CefAvailableVersion, Version> _cefVersions = new() {
+            { CefAvailableVersion.v103, new("103.0.90") },
+            { CefAvailableVersion.v143, new("143.0.90") }
+        };
+        readonly Version _suggestionVersion = _cefVersions[CefAvailableVersion.v143];
+        readonly Version _defaultVersion = _cefVersions[CefAvailableVersion.v103];
+        Version _currentVersion = _cefVersions[WebPeeperModule.Instance.Settings.CefVersion.Value];
         readonly Dictionary<string, AssemblyLoadType> _pendingResolveAssemblies = [];
         public bool Outdated => _currentVersion < _suggestionVersion;
         public void Load()
         {
+            _currentVersion = _suggestionVersion;
             SetupCefDllPath();
             SetupCefSharpDllFolder();
             SetupEventHandler();
@@ -110,13 +115,21 @@ namespace BhModule.WebPeeper
         {
             var isDefaultVersion = _currentVersion == _defaultVersion;
             _pendingResolveAssemblies.Add("CefHelper", AssemblyLoadType.Bytes);
-            if (isDefaultVersion) // if another version, would be resovle through env paths
+            if (isDefaultVersion)
             {
                 // will priority load CefSharp.dll in CefSharp.Core.Runtime.dll located folder when load CefSharp.Core.Runtime.dll,
                 // lead to load same dll twice, one is through bytes (cannot identify same file) another through path
-                _pendingResolveAssemblies.Add("CefSharp", AssemblyLoadType.Path); 
+                _pendingResolveAssemblies.Add("CefSharp", AssemblyLoadType.Path);
                 _pendingResolveAssemblies.Add("CefSharp.OffScreen", AssemblyLoadType.Bytes);
                 _pendingResolveAssemblies.Add("CefSharp.Core", AssemblyLoadType.Bytes);
+                _pendingResolveAssemblies.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
+            }
+            else
+            {
+                // doesnt use $PATH probing managed dll
+                _pendingResolveAssemblies.Add("CefSharp", AssemblyLoadType.Path);
+                _pendingResolveAssemblies.Add("CefSharp.OffScreen", AssemblyLoadType.Path);
+                _pendingResolveAssemblies.Add("CefSharp.Core", AssemblyLoadType.Path);
                 _pendingResolveAssemblies.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
             }
             var version = _currentVersion.ToString();
@@ -129,20 +142,20 @@ namespace BhModule.WebPeeper
         Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
         {
             var target = new Regex("[^,]+").Match(args.Name).Value;
-            AssemblyLoadType loadType;
-            var pending = _pendingResolveAssemblies.TryGetValue(target, out loadType);
+            var pending = _pendingResolveAssemblies.TryGetValue(target, out AssemblyLoadType loadType);
             if (!pending) return null;
             // Load(byte[]) never reused loaded, so drop loaded
             // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.assembly.load?view=net-8.0#system-reflection-assembly-load(system-byte())
-            _pendingResolveAssemblies.Remove(target); 
+            _pendingResolveAssemblies.Remove(target);
+            target = new Regex("(\\.dll)*$", RegexOptions.IgnoreCase).Replace(target, ".dll");
             if (loadType == AssemblyLoadType.Bytes)
             {
-                var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(Path.Combine(_cefSharpBhmPath, $"{target}.dll"));
+                var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(Path.Combine(_cefSharpBhmPath, target));
                 return Assembly.Load(fileBytes);
             }
             else if (loadType == AssemblyLoadType.Path)
             {
-                return Assembly.LoadFrom(Path.Combine(_cefSharpFolder, $"{target}.dll"));
+                return Assembly.LoadFrom(Path.Combine(_cefSharpFolder, target));
             }
             return null;
         }
@@ -221,7 +234,7 @@ namespace BhModule.WebPeeper
         public Task<bool> CreateWebBrowser()
         {
             Browser.CefSettingInit(
-                _cefFolder,
+                _currentVersion == _defaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
                 CefSettingFolder,
                 _cefSharpFolder,
                 WebPeeperModule.Instance.Settings.IsCleanMode.Value
