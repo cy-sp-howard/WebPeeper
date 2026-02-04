@@ -14,7 +14,7 @@ namespace BhModule.WebPeeper
     [Export(typeof(Blish_HUD.Modules.Module))]
     public class WebPeeperModule : Blish_HUD.Modules.Module
     {
-        private static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
+        public static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
         #region Service Managers
         internal SettingsManager SettingsManager => this.ModuleParameters.SettingsManager;
         internal ContentsManager ContentsManager => this.ModuleParameters.ContentsManager;
