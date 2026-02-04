@@ -224,18 +224,15 @@ namespace BhModule.WebPeeper
         public void OnUrlLoadError(string failedUrl)
         {
             NavigationBar.Instance?.SetAddressInputText(failedUrl);
-            var text = LastAddressInputText;
+            var text = string.IsNullOrWhiteSpace(LastAddressInputText) ? failedUrl : LastAddressInputText;
             LastAddressInputText = "";
-            if (!string.IsNullOrWhiteSpace(text))
+            if (Uri.TryCreate(text, UriKind.Absolute, out Uri _)) // doesnt search if input url
             {
-                if (Uri.TryCreate(text, UriKind.Absolute, out Uri _))
-                {
-                    WebPainter.Instance?.SetErrorState(true);
-                }
-                else
-                {
-                    Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
-                }
+                WebPainter.Instance?.SetErrorState(true);
+            }
+            else
+            {
+                Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
             }
         }
         void OnFullscreenModeChange(bool isFullscreen)

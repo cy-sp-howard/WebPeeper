@@ -101,23 +101,9 @@ namespace BhModule.WebPeeper
                     _addressInput.Text = Browser.Address;
                     return;
                 }
-                HandleLoading(true, false, true);
+                HandleLoading(true, false, true); // err url lead to hide loading too quick, so show it early
                 WebPeeperModule.Instance.CefService.LastAddressInputText = _addressInput.Text;
-                var cts = new CancellationTokenSource();
-                void stopManuallyErrTrigger(bool a1, bool a2, bool a3)
-                {
-                    Browser.LoadingStateChanged -= stopManuallyErrTrigger;
-                    cts.Cancel();
-                }
-                Browser.LoadingStateChanged += stopManuallyErrTrigger;
                 Browser.LoadUrlAsync(WebPeeperModule.Instance.CefService.LastAddressInputText);
-                Task.Delay(1000, cts.Token).ContinueWith(t =>
-                {
-                    Browser.LoadingStateChanged -= stopManuallyErrTrigger;
-                    if (t.IsCanceled || t.IsFaulted) return;
-                    HandleLoading(true, false, false);
-                    WebPeeperModule.Instance.CefService.OnUrlLoadError(_addressInput.Text);
-                });
             };
             _addressInput.InputFocusChanged += (sender, e) =>
             {
