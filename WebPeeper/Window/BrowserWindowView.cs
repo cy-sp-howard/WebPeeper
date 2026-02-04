@@ -18,18 +18,18 @@ namespace BhModule.WebPeeper
         protected override void Build(Container window)
         {
             _window = window;
-            var createTask = WebPeeperModule.Instance.CefService.CreateWebBrowser();
-            var done = createTask.Wait(TimeSpan.FromSeconds(10));
-            if (!done) return;
-            // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
-            WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
+            WebPeeperModule.Instance.CefService.CreateWebBrowser().ContinueWith(t =>
             {
-                _windowContent = new WindowContent(_window.ContentRegion.Size)
+                // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
+                WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
                 {
-                    Parent = window
-                };
-                _window.Resized += OnWindowResize;
-            });
+                    _windowContent = new WindowContent(_window.ContentRegion.Size)
+                    {
+                        Parent = window
+                    };
+                    _window.Resized += OnWindowResize;
+                });
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
         }
         void OnWindowResize(object sender, ResizedEventArgs evt)
         {

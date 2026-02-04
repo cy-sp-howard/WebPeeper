@@ -17,6 +17,7 @@ namespace CefHelper
 
         const string SchemeName = "blish-hud";
         const string DomainName = "web-peeper";
+        const int ExecuteScriptTimeout = 1000;
         static public bool CanGoBack => _webBrowser?.CanGoBack == true;
         static public bool CanGoForward => _webBrowser?.CanGoForward == true;
         static public string Address => string.IsNullOrWhiteSpace(_webBrowser?.Address) ? "" : _webBrowser.Address;
@@ -70,57 +71,61 @@ namespace CefHelper
         static public Task<bool> Create(string defaultUrl, int frameRate, bool isMobile)
         {
             var tcs = new TaskCompletionSource<bool>();
-            if (_webBrowser is null || _webBrowser.IsDisposed)
+            try
             {
-                var browserSetting = new BrowserSettings(true)
+                if (_webBrowser is null || _webBrowser.IsDisposed)
                 {
-                    WindowlessFrameRate = frameRate
-                };
+                    var browserSetting = new BrowserSettings(true)
+                    {
+                        WindowlessFrameRate = frameRate
+                    };
 
-                _webBrowser = new ChromiumWebBrowser(defaultUrl, browserSetting);
-                _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); };
-                _webBrowser.LoadingStateChanged += (s, e) =>
-                {
-                    LoadingStateChanged?.Invoke(e.CanGoBack, e.CanGoForward, e.IsLoading);
-                };
-                _webBrowser.AddressChanged += (s, e) => { AddressChanged?.Invoke(e.Address); };
-                _webBrowser.TitleChanged += (s, e) => { TitleChanged?.Invoke(e.Title); };
-                _webBrowser.FrameLoadStart += (s, e) => { FrameLoadStart?.Invoke(); };
-                _webBrowser.LoadError += (s, e) => { UrlLoadError?.Invoke(e.FailedUrl); };
-                _webBrowser.Paint += (s, e) =>
-                {
-                    e.Handled = Paint?.Invoke(e.BufferHandle, e.Width, e.Height) == true;
-                };
-                _webBrowser.DisplayHandler = new FullscreenHandler()
-                {
-                    FullscreenModeChanged = (isFullscreen) => { FullscreenModeChanged?.Invoke(isFullscreen); },
-                };
-                _webBrowser.FrameHandler = new WebUnloadHandler()
-                {
-                    MainFrameChanged = () => { FocusedChanged?.Invoke(false); }
-                };
-                _webBrowser.RequestHandler = new FocusBrowserAndUserAgentHandler() { IsMobile = isMobile };
-                _webBrowser.LifeSpanHandler = new PopupHandler();
-                _webBrowser.RenderProcessMessageHandler = new NodeFocusHandler()
-                {
-                    FocusNodeChanged = (node) =>
+                    _webBrowser = new ChromiumWebBrowser(defaultUrl, browserSetting);
+                    _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); };
+                    _webBrowser.LoadingStateChanged += (s, e) =>
                     {
-                        if (node is null) { FocusedChanged?.Invoke(false); return; }
-                        bool isContenteditable = node["contenteditable"] is not null && node["contenteditable"] != "false";
-                        if (isContenteditable || node.TagName == "INPUT" || node.TagName == "TEXTAREA")
+                        LoadingStateChanged?.Invoke(e.CanGoBack, e.CanGoForward, e.IsLoading);
+                    };
+                    _webBrowser.AddressChanged += (s, e) => { AddressChanged?.Invoke(e.Address); };
+                    _webBrowser.TitleChanged += (s, e) => { TitleChanged?.Invoke(e.Title); };
+                    _webBrowser.FrameLoadStart += (s, e) => { FrameLoadStart?.Invoke(); };
+                    _webBrowser.LoadError += (s, e) => { UrlLoadError?.Invoke(e.FailedUrl); };
+                    _webBrowser.Paint += (s, e) =>
+                    {
+                        e.Handled = Paint?.Invoke(e.BufferHandle, e.Width, e.Height) == true;
+                    };
+                    _webBrowser.DisplayHandler = new FullscreenHandler()
+                    {
+                        FullscreenModeChanged = (isFullscreen) => { FullscreenModeChanged?.Invoke(isFullscreen); },
+                    };
+                    _webBrowser.FrameHandler = new WebUnloadHandler()
+                    {
+                        MainFrameChanged = () => { FocusedChanged?.Invoke(false); }
+                    };
+                    _webBrowser.RequestHandler = new FocusBrowserAndUserAgentHandler() { IsMobile = isMobile };
+                    _webBrowser.LifeSpanHandler = new PopupHandler();
+                    _webBrowser.RenderProcessMessageHandler = new NodeFocusHandler()
+                    {
+                        FocusNodeChanged = (node) =>
                         {
-                            FocusedChanged?.Invoke(true);
+                            if (node is null) { FocusedChanged?.Invoke(false); return; }
+                            bool isContenteditable = node["contenteditable"] is not null && node["contenteditable"] != "false";
+                            if (isContenteditable || node.TagName == "INPUT" || node.TagName == "TEXTAREA")
+                            {
+                                FocusedChanged?.Invoke(true);
+                            }
+                            else FocusedChanged?.Invoke(false);
+                        },
+                        ContextCreated = (frame) =>
+                        {
+                            if (string.IsNullOrWhiteSpace(ContextCreatedScript) || _webBrowser.CanExecuteJavascriptInMainFrame != true) return;
+                            frame.ExecuteJavaScriptAsync(ContextCreatedScript);
                         }
-                        else FocusedChanged?.Invoke(false);
-                    },
-                    ContextCreated = (frame) =>
-                    {
-                        if (string.IsNullOrWhiteSpace(ContextCreatedScript) || _webBrowser.CanExecuteJavascriptInMainFrame != true) return;
-                        frame.ExecuteJavaScriptAsync(ContextCreatedScript);
-                    }
-                };
+                    };
+                }
+                if (_webBrowser.IsBrowserInitialized) tcs.TrySetResult(true);
             }
-            if (_webBrowser.IsBrowserInitialized) tcs.TrySetResult(true);
+            catch (Exception ex) { tcs.TrySetException(ex); }
             return tcs.Task;
         }
         static public void Close()
@@ -374,7 +379,7 @@ namespace CefHelper
             _webBrowser?.GetZoomLevelAsync()?.ContinueWith(t =>
             {
                 _webBrowser?.SetZoomLevel(t.Result + 0.2f * rate);
-            });
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
         }
         static public Task<bool> GetFullscreenState()
         {
@@ -383,8 +388,8 @@ namespace CefHelper
             _webBrowser.EvaluateScriptAsync("document.fullscreen")?.ContinueWith(t =>
                 {
                     tcs.TrySetResult((bool)t.Result.Result);
-                });
-            Task.Delay(2000).ContinueWith(t => { tcs.TrySetResult(false); });
+                }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            Task.Delay(ExecuteScriptTimeout).ContinueWith(t => { tcs.TrySetResult(false); });
             return tcs.Task;
         }
         static public Task<(int, int)> GetInputPosition()
@@ -397,8 +402,8 @@ namespace CefHelper
                     var inputX = (int)inputXY[0] + 2;
                     var inputY = (int)inputXY[1];
                     tcs.TrySetResult((inputX, inputY));
-                });
-            Task.Delay(2000).ContinueWith(t => { tcs.TrySetResult((0, 0)); });
+                }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            Task.Delay(ExecuteScriptTimeout).ContinueWith(t => { tcs.TrySetResult((0, 0)); });
             return tcs.Task;
         }
         static public Task<string> GetMainFrameTitle()
@@ -408,8 +413,8 @@ namespace CefHelper
             _webBrowser.EvaluateScriptAsync("document.title")?.ContinueWith(t =>
             {
                 tcs.TrySetResult((string)t.Result.Result);
-            });
-            Task.Delay(1000).ContinueWith(t => { tcs.TrySetResult(""); });
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            Task.Delay(ExecuteScriptTimeout).ContinueWith(t => { tcs.TrySetResult(""); });
             return tcs.Task;
         }
         static public void BlurInput()

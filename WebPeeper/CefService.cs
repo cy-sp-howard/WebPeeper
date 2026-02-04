@@ -243,26 +243,47 @@ namespace BhModule.WebPeeper
             if (isFullscreen) NavigationBar.Instance?.Hide();
             else NavigationBar.Instance?.Show();
         }
-        public Task<bool> CreateWebBrowser()
+        public Task CreateWebBrowser()
         {
-            SetEventHandlers();
-            Browser.CefSettingInit(
-                _currentVersion == _defaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
-                CefSettingFolder,
-                _cefSharpFolder,
-                WebPeeperModule.Instance.Settings.IsCleanMode.Value
-                );
-            var frameRate = 30;
-            if (WebPeeperModule.Instance.Settings.IsFollowBhFps.Value)
+            var tcs = new TaskCompletionSource<bool>();
+            try
             {
-                frameRate = GameService.Graphics.FrameLimiter switch
+                var settings = WebPeeperModule.Instance.Settings;
+                SetEventHandlers();
+                Browser.CefSettingInit(
+                    _currentVersion == _defaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
+                    CefSettingFolder,
+                    _cefSharpFolder,
+                    settings.IsCleanMode.Value
+                    );
+                var frameRate = 30;
+                if (settings.IsFollowBhFps.Value)
                 {
-                    FramerateMethod.LockedTo30Fps => 30,
-                    FramerateMethod.LockedTo60Fps => 60,
-                    _ => 60,
-                };
+                    frameRate = GameService.Graphics.FrameLimiter switch
+                    {
+                        FramerateMethod.LockedTo30Fps => 30,
+                        FramerateMethod.LockedTo60Fps => 60,
+                        _ => 60,
+                    };
+                }
+                Browser.Create(settings.HomeUrl.Value, frameRate, settings.IsMobileLayout.Value)
+                    .ContinueWith(t =>
+                    {
+                        if (t.Status == TaskStatus.RanToCompletion) tcs.TrySetResult(true);
+                        else
+                        {
+                            WebPeeperModule.Logger.Error(t.Exception?.Message);
+                            tcs.TrySetException(t.Exception);
+                        }
+                    });
+                Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(t => tcs.TrySetCanceled());
             }
-            return Browser.Create(WebPeeperModule.Instance.Settings.HomeUrl.Value, frameRate, WebPeeperModule.Instance.Settings.IsMobileLayout.Value);
+            catch (Exception ex)
+            {
+                WebPeeperModule.Logger.Error(ex.Message);
+                tcs.TrySetException(ex);
+            }
+            return tcs.Task;
         }
     }
     enum AssemblyLoadType
