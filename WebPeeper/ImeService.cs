@@ -11,7 +11,7 @@ namespace BhModule.WebPeeper
 {
     // https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.nativewindow?view=windowsdesktop-10.0
     // https://github.com/cefsharp/CefSharp/blob/v143.0.90/CefSharp.Wpf/Internals/IMEHandler.cs
-    public class ImeService : NativeWindow
+    internal class ImeService : NativeWindow
     {
         readonly IntPtr winHandle;
         IntPtr _himc;

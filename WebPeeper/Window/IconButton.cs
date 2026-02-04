@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace Blish_HUD.Controls
 {
-    public class IconButton : Control
+    internal class IconButton : Control
     {
         readonly Texture2D _iconTexture;
         Rectangle _destIconRect;
@@ -30,7 +30,7 @@ namespace Blish_HUD.Controls
             _destIconHoveredRect = new Rectangle(iconPaddingHoverdX + textureResultHoverdW / 2, iconPaddingHoverdY + textureResultHoverdH / 2, textureResultHoverdW, textureResultHoverdH);
             _sourceIconRect = new(0, 0, _sourceSize, _sourceSize);
             _originPos = new(_iconTexture.Width / 2, _iconTexture.Height / 2);
-            this.Size = new Point(buttonSize, buttonSize);
+            Size = new Point(buttonSize, buttonSize);
         }
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {

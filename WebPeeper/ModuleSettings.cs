@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
 {
-    public class ModuleSettings
+    internal class ModuleSettings
     {
         const string _defaultSearchUrl = "https://www.google.com/search?q={text} site:wiki.guildwars2.com";
         const string _defaultHomeUrl = "https://wiki.guildwars2.com/";
@@ -159,7 +159,7 @@ namespace BhModule.WebPeeper
         }
     }
     // SettingsView never call Unload, so cannot bind event (v1.2.0).
-    public class WebPeeperSettingsView(SettingCollection settings) : View
+    internal class WebPeeperSettingsView(SettingCollection settings) : View
     {
         static public Action UpdateWebWindowOpacityTitle;
         static public Action UpdateIsAutoPauseWebState;
@@ -210,7 +210,7 @@ namespace BhModule.WebPeeper
             }
         }
     }
-    public class HexColorSettingView(SettingEntry<string> setting, int definedWidth = -1) : StringSettingView(setting, definedWidth)
+    internal class HexColorSettingView(SettingEntry<string> setting, int definedWidth = -1) : StringSettingView(setting, definedWidth)
     {
         ColorPreview _colorPreview;
         protected override void BuildSetting(Container buildPanel)
@@ -233,7 +233,7 @@ namespace BhModule.WebPeeper
             catch { }
         }
     }
-    public class ColorPreview : Control
+    internal class ColorPreview : Control
     {
         static readonly TextureRegion2D _colorTextureRegion = Blish_HUD.Controls.Resources.Control.TextureAtlasControl.GetRegion("colorpicker/cp-clr-v1");
         static readonly TextureRegion2D _borderTextureRegion = Blish_HUD.Controls.Resources.Control.TextureAtlasControl.GetRegion("colorpicker/cp-clr-active");
@@ -248,7 +248,7 @@ namespace BhModule.WebPeeper
             spriteBatch.DrawOnCtrl(this, _borderTextureRegion, bounds, Color.Black);
         }
     }
-    public class Padding : Control
+    internal class Padding : Control
     {
         public string message = "";
         public Padding(int height = 16)

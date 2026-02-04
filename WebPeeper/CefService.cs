@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
 {
-    public class CefService
+    internal class CefService
     {
         static public string CefSettingFolder = DirectoryUtil.RegisterDirectory(WebPeeperModule.InstanceModuleManager.Manifest.Name.Replace(" ", "").ToLower());
         static public string CefSharpVersionsFolder = DirectoryUtil.RegisterDirectory(CefSettingFolder, "CefVersions");

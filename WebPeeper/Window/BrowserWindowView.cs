@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
 {
-    public class BrowserWindowView : View
+    internal class BrowserWindowView : View
     {
         Container _window;
         WindowContent _windowContent;
@@ -41,7 +41,7 @@ namespace BhModule.WebPeeper
             _windowContent?.Dispose();
         }
     }
-    public class NavigationBar : FlowPanel
+    internal class NavigationBar : FlowPanel
     {
         static public NavigationBar Instance;
         static readonly Texture2D _btnTexture = GameService.Content.GetTexture("784268");
@@ -187,7 +187,7 @@ namespace BhModule.WebPeeper
             BookmarkBtnClicked = null;
         }
     }
-    public class WindowContent : Panel
+    internal class WindowContent : Panel
     {
         readonly NavigationBar _navigationBar;
         Control _mainContent;

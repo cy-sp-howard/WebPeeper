@@ -8,7 +8,7 @@ using System;
 
 namespace BhModule.WebPeeper.Window
 {
-    public class Warning : FlowPanel
+    internal class Warning : FlowPanel
     {
         readonly WarningContent _content;
         readonly Checkbox _alwaysHideCheckbox;
@@ -60,7 +60,7 @@ namespace BhModule.WebPeeper.Window
             Dispose();
         }
     }
-    public class WarningContent : Control
+    internal class WarningContent : Control
     {
         readonly string _originText = Strings.UIService.Warning;
         string _text = "";

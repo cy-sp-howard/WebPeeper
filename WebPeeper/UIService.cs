@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace BhModule.WebPeeper
 {
-    public class UiService
+    internal class UiService
     {
         CornerIcon _browserCornerIcon;
         BrowserWindow _browserWindow;

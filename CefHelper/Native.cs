@@ -2,7 +2,7 @@
 
 namespace CefHelper
 {
-    static public class Native
+    static internal class Native
     {
 
         [DllImport("user32.dll")]

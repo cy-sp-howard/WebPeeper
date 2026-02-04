@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
 {
-    public class BrowserWindow : StandardWindow
+    internal class BrowserWindow : StandardWindow
     {
         static readonly Point _windowSize = new(500, 700);
         static readonly Point _windowBgOffset = new(-35, -30);

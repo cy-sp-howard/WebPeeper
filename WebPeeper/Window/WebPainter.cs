@@ -11,7 +11,7 @@ using System.Diagnostics;
 
 namespace BhModule.WebPeeper
 {
-    public class WebPainter : Control
+    internal class WebPainter : Control
     {
         public static WebPainter Instance;
         public Point LocationAtForm

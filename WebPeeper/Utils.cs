@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace BhModule.WebPeeper
 {
-    public static class Utils
+    internal static class Utils
     {
 
         [DllImport("imm32.dll")]
@@ -69,7 +69,7 @@ namespace BhModule.WebPeeper
     }
 
 
-    public class NotifyClass : Control
+    internal class NotifyClass : Control
     {
         float _duration = 3000;
         string _message;

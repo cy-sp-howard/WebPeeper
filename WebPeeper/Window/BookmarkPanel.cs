@@ -15,7 +15,7 @@ using System.Text.RegularExpressions;
 
 namespace BhModule.WebPeeper
 {
-    public class BookmarkPanel : Panel
+    internal class BookmarkPanel : Panel
     {
         static public BookmarkPanel Instance;
         static readonly Point _bgOverSize = new(75, 50);
@@ -259,7 +259,7 @@ namespace BhModule.WebPeeper
             File.WriteAllText(_jsonPath, JsonConvert.SerializeObject(_bookmarkMenuItems.Keys));
         }
     }
-    public class BookmarkMenu : Menu
+    internal class BookmarkMenu : Menu
     {
         static readonly FieldInfo _childPropertyChangedField = typeof(Control).GetField("PropertyChanged", BindingFlags.Instance | BindingFlags.NonPublic);
         const int ItemHeight = 40;
@@ -294,7 +294,7 @@ namespace BhModule.WebPeeper
             base.RecalculateLayout();
         }
     }
-    public class BookmarkItem : MenuItem
+    internal class BookmarkItem : MenuItem
     {
         readonly Bookmark _bookmark;
         public event EventHandler<EventArgs> Removed;
@@ -432,14 +432,14 @@ namespace BhModule.WebPeeper
             base.DisposeControl();
         }
     }
-    public class Bookmark
+    internal class Bookmark
     {
         [JsonProperty("name", Required = Required.Always)]
         public string Name;
         [JsonProperty("url", Required = Required.Always)]
         public string URL;
     }
-    public class BookmarkDraggedEventArgs(Bookmark bookmark, int position) : EventArgs
+    internal class BookmarkDraggedEventArgs(Bookmark bookmark, int position) : EventArgs
     {
         readonly public Bookmark Bookmark = bookmark;
         readonly public int Position = position;

@@ -16,19 +16,19 @@ namespace BhModule.WebPeeper
     {
         static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
         #region Service Managers
-        internal SettingsManager SettingsManager => this.ModuleParameters.SettingsManager;
-        internal ContentsManager ContentsManager => this.ModuleParameters.ContentsManager;
-        internal DirectoriesManager DirectoriesManager => this.ModuleParameters.DirectoriesManager;
-        internal Gw2ApiManager Gw2ApiManager => this.ModuleParameters.Gw2ApiManager;
+        internal SettingsManager SettingsManager => ModuleParameters.SettingsManager;
+        internal ContentsManager ContentsManager => ModuleParameters.ContentsManager;
+        internal DirectoriesManager DirectoriesManager => ModuleParameters.DirectoriesManager;
+        internal Gw2ApiManager Gw2ApiManager => ModuleParameters.Gw2ApiManager;
         #endregion
-        public CefService CefService { get; private set; }
-        public ImeService ImeService { get; private set; }
-        public UiService UiService { get; private set; }
-        public ModuleSettings Settings { get; private set; }
-        public static BlishHud BlishHudInstance;
-        public static MenuItem InstanceSettingsMenuItem;
-        public static ModuleManager InstanceModuleManager;
-        public static WebPeeperModule Instance;
+        internal CefService CefService { get; private set; }
+        internal ImeService ImeService { get; private set; }
+        internal UiService UiService { get; private set; }
+        internal ModuleSettings Settings { get; private set; }
+        internal static BlishHud BlishHudInstance;
+        internal static MenuItem InstanceSettingsMenuItem;
+        internal static ModuleManager InstanceModuleManager;
+        internal static WebPeeperModule Instance;
         [ImportingConstructor]
         public WebPeeperModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters)
         {
