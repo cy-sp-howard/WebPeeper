@@ -135,6 +135,16 @@ namespace BhModule.WebPeeper
             });
             return tcs.Task;
         }
+        void HandleHidden()
+        {
+            Browser.BlurInput();
+            if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
+            else if (Settings.IsAutoPauseWeb.Value)
+            {
+                Browser.WasHidden(true);
+            }
+            BookmarkPanel.Instance?.SetChildrenEditState(false);
+        }
         protected override void OnShown(EventArgs e)
         {
             if (_firstShow)
@@ -145,7 +155,7 @@ namespace BhModule.WebPeeper
                 var maxWidth = Parent.Width - 200;
                 if (Width > maxWidth) Width = maxWidth;
             }
-            if (Settings.IsAutoPauseWeb.Value && Browser.Ready)
+            if (Settings.IsAutoPauseWeb.Value)
             {
                 Browser.WasHidden(false);
             }
@@ -153,14 +163,7 @@ namespace BhModule.WebPeeper
         }
         protected override void OnHidden(EventArgs e)
         {
-            if (!Browser.Ready) return;
-            Browser.BlurInput();
-            if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
-            else if (Settings.IsAutoPauseWeb.Value)
-            {
-                Browser.WasHidden(true);
-            }
-            BookmarkPanel.Instance?.SetChildrenEditState(false);
+            if (CefService.DllLoadStarted) HandleHidden();
             base.OnHidden(e);
         }
         public override void RecalculateLayout()

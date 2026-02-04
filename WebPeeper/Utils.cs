@@ -71,10 +71,10 @@ namespace BhModule.WebPeeper
 
     public class NotifyClass : Control
     {
-        private float duration = 3000;
-        private string message;
-        private bool waitingForPaint = true;
-        private DateTime msgStartTime = DateTime.Now;
+        float _duration = 3000;
+        string _message;
+        bool _waitingForPaint = true;
+        DateTime _msgStartTime = DateTime.Now;
         public override void DoUpdate(GameTime gameTime)
         {
             Size = new Point(Parent.Size.X, 200);
@@ -82,11 +82,11 @@ namespace BhModule.WebPeeper
         }
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {
-            if (message != null)
+            if (_message != null)
             {
-                if (waitingForPaint) msgStartTime = DateTime.Now;
-                float existTime = (float)(DateTime.Now - msgStartTime).TotalMilliseconds;
-                float remainTime = duration - (float)existTime;
+                if (_waitingForPaint) _msgStartTime = DateTime.Now;
+                float existTime = (float)(DateTime.Now - _msgStartTime).TotalMilliseconds;
+                float remainTime = _duration - (float)existTime;
                 float opacity = remainTime > 1000 ? 1 : remainTime / 1000;
                 if (opacity < 0)
                 {
@@ -94,21 +94,21 @@ namespace BhModule.WebPeeper
                     return;
                 }
                 Color textColor = Color.Yellow * opacity;
-                spriteBatch.DrawStringOnCtrl(this, message, GameService.Content.DefaultFont32, new Rectangle(0, 0, Width, Height), textColor, false, false, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
+                spriteBatch.DrawStringOnCtrl(this, _message, GameService.Content.DefaultFont32, new Rectangle(0, 0, Width, Height), textColor, false, false, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
             }
-            waitingForPaint = false;
+            _waitingForPaint = false;
         }
         public void Clear()
         {
             Parent = null;
-            message = null;
+            _message = null;
         }
         public void Show(string text, float duration = 3000)
         {
             Parent = GameService.Graphics.SpriteScreen;
-            msgStartTime = DateTime.Now;
-            message = text;
-            this.duration = duration;
+            _msgStartTime = DateTime.Now;
+            _message = text;
+            _duration = duration;
         }
         protected override CaptureType CapturesInput()
         {

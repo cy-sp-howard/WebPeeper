@@ -32,8 +32,6 @@ namespace CefHelper
         static public event Action<string> AddressChanged;
         static public event Func<IntPtr, int, int, bool> Paint;
         static ChromiumWebBrowser _webBrowser;
-        static public bool Created { get; private set; } = false;
-        static public bool Ready { get; private set; } = false;
         static public void CefSettingInit(string localesPath, string settingPath, string subprocessPath, bool clearUserData)
         {
             if (Cef.IsInitialized == true) return;
@@ -80,8 +78,7 @@ namespace CefHelper
                 };
 
                 _webBrowser = new ChromiumWebBrowser(defaultUrl, browserSetting);
-                Created = true;
-                _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); Ready = true; };
+                _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); };
                 _webBrowser.LoadingStateChanged += (s, e) =>
                 {
                     LoadingStateChanged?.Invoke(e.CanGoBack, e.CanGoForward, e.IsLoading);
@@ -128,8 +125,6 @@ namespace CefHelper
         }
         static public void Close()
         {
-            Ready = false;
-            Created = false;
             _webBrowser?.Dispose();
             _webBrowser = null;
         }
@@ -143,7 +138,7 @@ namespace CefHelper
         }
         static public void LoadUrlAsync(string url)
         {
-            _webBrowser?.LoadUrlAsync(url);
+            _webBrowser.LoadUrlAsync(url);
         }
         static public void WasHidden(bool hidden)
         {
@@ -436,7 +431,7 @@ namespace CefHelper
         }
         static public void Dispose()
         {
-            if (Created) Close();
+            Close();
             BlishHudSchemeRequested = null;
             FocusedChanged = null;
             TitleChanged = null;

@@ -14,7 +14,7 @@ namespace BhModule.WebPeeper
     [Export(typeof(Blish_HUD.Modules.Module))]
     public class WebPeeperModule : Blish_HUD.Modules.Module
     {
-        private static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
+        static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
         #region Service Managers
         internal SettingsManager SettingsManager => this.ModuleParameters.SettingsManager;
         internal ContentsManager ContentsManager => this.ModuleParameters.ContentsManager;
@@ -55,8 +55,8 @@ namespace BhModule.WebPeeper
                     return ((MenuItem)i).Text == InstanceModuleManager.Manifest.Name;
                 }) as MenuItem;
 
-            ImeService = new ImeService(BlishHudInstance.FormHandle);
             CefService = new CefService();
+            ImeService = new ImeService(BlishHudInstance.FormHandle);
             UiService = new UiService();
         }
         protected override async Task LoadAsync()
@@ -70,8 +70,8 @@ namespace BhModule.WebPeeper
         protected override void Unload()
         {
             Settings?.Unload();
-            ImeService?.Unload();
             CefService?.Unload();
+            ImeService?.Unload();
             UiService?.Unload();
         }
     }

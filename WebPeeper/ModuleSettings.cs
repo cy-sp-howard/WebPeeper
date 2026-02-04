@@ -11,7 +11,6 @@ using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using MonoGame.Extended.TextureAtlases;
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -22,12 +21,12 @@ namespace BhModule.WebPeeper
         const string _defaultSearchUrl = "https://www.google.com/search?q={text} site:wiki.guildwars2.com";
         const string _defaultHomeUrl = "https://wiki.guildwars2.com/";
         const string _defaultBgColor = "#00000000";
-        public SettingEntry<CefAvailableVersion> CefVersion { get; private set; }
         public SettingEntry<KeyBinding> SettingsKey { get; private set; }
         public SettingEntry<KeyBinding> WebWindowKey { get; private set; }
         public SettingEntry<KeyBinding> ZoomInKey { get; private set; }
         public SettingEntry<KeyBinding> ZoomOutKey { get; private set; }
         public SettingEntry<KeyBinding> CaptureKeyboardKey { get; private set; }
+        public SettingEntry<CefAvailableVersion> CefVersion { get; private set; }
         public SettingEntry<string> HomeUrl { get; private set; }
         public SettingEntry<string> SearchUrl { get; private set; }
         public SettingEntry<string> WebBgColor { get; private set; }
@@ -44,9 +43,8 @@ namespace BhModule.WebPeeper
         {
             InitUISetting(settings);
         }
-        private void InitUISetting(SettingCollection settings)
+        void InitUISetting(SettingCollection settings)
         {
-            CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => "Need to download additional files, about 200mb. Restart required.");
             SettingsKey = settings.DefineSetting(nameof(SettingsKey), new KeyBinding(ModifierKeys.Ctrl, Keys.F12), () => "Settings Toggle", () => "");
             SettingsKey.Value.Activated += ToggleSettings;
             SettingsKey.Value.Enabled = true;
@@ -54,14 +52,15 @@ namespace BhModule.WebPeeper
             WebWindowKey.Value.Activated += ToggleWebWindow;
             WebWindowKey.Value.Enabled = true;
             ZoomInKey = settings.DefineSetting(nameof(ZoomInKey), new KeyBinding(ModifierKeys.Ctrl, Keys.Add), () => "Zoom In", () => "Only works when the cursor is within the web area.");
-            ZoomInKey.Value.Activated += ZoomInWeb;
+            ZoomInKey.Value.Activated += OnZoomInActivated;
             ZoomInKey.Value.Enabled = true;
             ZoomOutKey = settings.DefineSetting(nameof(ZoomOutKey), new KeyBinding(ModifierKeys.Ctrl, Keys.Subtract), () => "Zoom Out", () => "Only works when the cursor is within the web area.");
-            ZoomOutKey.Value.Activated += ZoomOutWeb;
+            ZoomOutKey.Value.Activated += OnZoomOutActivated;
             ZoomOutKey.Value.Enabled = true;
             CaptureKeyboardKey = settings.DefineSetting(nameof(CaptureKeyboardKey), new KeyBinding(ModifierKeys.Ctrl, Keys.Space), () => "Focus the Blish-HUD Window", () => "For web input field, only works when the cursor is within the web area. In theory it would auto-focus when caret is flashing.");
-            CaptureKeyboardKey.Value.Activated += FocusBHWindow;
+            CaptureKeyboardKey.Value.Activated += OnCaptureKeyboardActivated;
             CaptureKeyboardKey.Value.Enabled = true;
+            CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => "Need to download additional files, about 200mb. Restart required.");
             SearchUrl = settings.DefineSetting(nameof(SearchUrl), _defaultSearchUrl, () => "Search Engine", () => "{text} is represent text variable.");
             SearchUrl.SettingChanged += (sender, e) =>
             {
@@ -103,10 +102,14 @@ namespace BhModule.WebPeeper
             };
             IsAutoPauseWeb.SetDisabled(IsAutoQuitProcess.Value);
             IsMobileLayout = settings.DefineSetting(nameof(IsMobileLayout), true, () => "Use Mobile Website", () => "Whether use mobile User-Agent.");
-            IsMobileLayout.SettingChanged += (s, e) => { WebPeeperModule.Instance.CefService.ApplyUserAgent(); };
+            IsMobileLayout.SettingChanged += (s, e) =>
+            {
+                if (!WebPeeperModule.Instance.CefService.DllLoadStarted) return;
+                WebPeeperModule.Instance.CefService.ApplyUserAgent();
+            };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
             IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User-Data", () => "Clear cache and user-data while WebPeeper module initialize.");
-            IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if unchecked.");
+            IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if checked.  Restart required.");
             IsBlockKeybinds = settings.DefineSetting(nameof(IsBlockKeybinds), true, () => "Block All Blish-HUD Keybinds while the Web is Accepting Input", () => "Uncheck if keybinds fail after typing.");
             IsShowWarning = settings.DefineSetting(nameof(IsShowWarning), true, () => "Show Outdated Warning", () => "");
         }
@@ -114,9 +117,9 @@ namespace BhModule.WebPeeper
         {
             SettingsKey.Value.Activated -= ToggleSettings;
             WebWindowKey.Value.Activated -= ToggleWebWindow;
-            CaptureKeyboardKey.Value.Activated -= FocusBHWindow;
-            ZoomInKey.Value.Activated -= ZoomInWeb;
-            ZoomOutKey.Value.Activated -= ZoomOutWeb;
+            CaptureKeyboardKey.Value.Activated -= OnCaptureKeyboardActivated;
+            ZoomInKey.Value.Activated -= OnZoomInActivated;
+            ZoomOutKey.Value.Activated -= OnZoomOutActivated;
         }
         void ToggleSettings(object sender, EventArgs e)
         {
@@ -126,20 +129,32 @@ namespace BhModule.WebPeeper
         {
             WebPeeperModule.Instance.UiService?.ToggleBrowser();
         }
-        void FocusBHWindow(object sender, EventArgs e)
+        void OnCaptureKeyboardActivated(object sender, EventArgs e)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !Browser.Ready) return;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true) return;
+            FocusBHWindow();
+        }
+        void FocusBHWindow()
+        {
             Utils.SetForegroundWindow(WebPeeperModule.BlishHudInstance.FormHandle);
             Browser.FocusBlurredElement();
         }
-        void ZoomInWeb(object sender, EventArgs e)
+        void OnZoomInActivated(object sender, EventArgs e)
         {
-            if (WebPainter.Instance?.MouseOver != true || !Browser.Ready) return;
+            if (WebPainter.Instance?.MouseOver != true) return;
+            ZoomInWeb();
+        }
+        void ZoomInWeb()
+        {
             Browser.Zoom(1);
         }
-        void ZoomOutWeb(object sender, EventArgs e)
+        void OnZoomOutActivated(object sender, EventArgs e)
         {
-            if (WebPainter.Instance?.MouseOver != true || !Browser.Ready) return;
+            if (WebPainter.Instance?.MouseOver != true) return;
+            ZoomOutWeb();
+        }
+        void ZoomOutWeb()
+        {
             Browser.Zoom(-1);
         }
     }
@@ -163,7 +178,7 @@ namespace BhModule.WebPeeper
                 AutoSizePadding = new Point(0, 15),
                 Parent = buildPanel
             };
-            
+
             foreach (var setting in _settings.Where(s => s.SessionDefined))
             {
                 IView settingView = null;
@@ -246,10 +261,5 @@ namespace BhModule.WebPeeper
             if (message == "") return;
             spriteBatch.DrawStringOnCtrl(this, message, GameService.Content.DefaultFont14, new Rectangle(0, 0, Width, Height), Color.Red, false, false, 1, HorizontalAlignment.Center, VerticalAlignment.Middle);
         }
-    }
-    public enum CefAvailableVersion
-    {
-        v103,
-        v143
     }
 }

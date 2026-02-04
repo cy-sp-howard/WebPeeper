@@ -4,6 +4,7 @@ using CefHelper;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -15,34 +16,42 @@ namespace BhModule.WebPeeper
 {
     public class CefService
     {
-        public string LastAddressInputText = "";
         static public string CefSettingFolder = DirectoryUtil.RegisterDirectory(WebPeeperModule.InstanceModuleManager.Manifest.Name.Replace(" ", "").ToLower());
         static public string CefSharpVersionsFolder = DirectoryUtil.RegisterDirectory(CefSettingFolder, "CefVersions");
         string _cefFolder;
         string _cefSharpFolder;
         string _cefSharpBhmPath;
+        readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
+        public event EventHandler DllLoadStart;
+        public bool DllLoadStarted { get; private set; } = false;
         static readonly Dictionary<CefAvailableVersion, Version> _cefVersions = new() {
             { CefAvailableVersion.v103, new("103.0.90") },
             { CefAvailableVersion.v143, new("143.0.90") }
         };
         readonly Version _suggestionVersion = _cefVersions[CefAvailableVersion.v143];
         readonly Version _defaultVersion = _cefVersions[CefAvailableVersion.v103];
-        Version _currentVersion = _cefVersions[WebPeeperModule.Instance.Settings.CefVersion.Value];
-        readonly Dictionary<string, AssemblyLoadType> _pendingResolveAssemblies = [];
+        readonly Version _currentVersion = _cefVersions[WebPeeperModule.Instance.Settings.CefVersion.Value];
         public bool Outdated => _currentVersion < _suggestionVersion;
+        public string LastAddressInputText = "";
         public void Load()
         {
-            _currentVersion = _suggestionVersion;
+            CleanOldData();
             SetupCefDllPath();
             SetupCefSharpDllFolder();
-            SetupEventHandler();
-            LoadContextCreatedScript();
         }
         public void Unload()
         {
             WebPeeperModule.BlishHudInstance.Exiting -= OnBlishHudExiting;
             AppDomain.CurrentDomain.AssemblyResolve -= CefSharpLibResolver;
-            Browser.Dispose();
+            if (DllLoadStarted) OnBlishHudExiting(this, EventArgs.Empty);
+        }
+        void CleanOldData()
+        {
+            var path = Path.Combine(DirectoryUtil.CachePath, "cefsharp");
+            if (Directory.Exists(path))
+            {
+                try { Directory.Delete(path, true); } catch { }
+            }
         }
         void SetupCefDllPath()
         {
@@ -72,8 +81,10 @@ namespace BhModule.WebPeeper
             if (GameService.GameIntegration.Gw2Instance.Gw2IsRunning) setLibCefDllFolder(this, EventArgs.Empty);
             else GameService.GameIntegration.Gw2Instance.Gw2Started += setLibCefDllFolder;
         }
-        void SetupEventHandler()
+        void SetEventHandlers()
         {
+            if (!string.IsNullOrWhiteSpace(Browser.ContextCreatedScript)) return;
+            SetContextCreatedScript();
             WebPeeperModule.BlishHudInstance.Exiting += OnBlishHudExiting;
             Browser.BlishHudSchemeRequested += OnBlishHudSchemeRequested;
             Browser.FocusedChanged += OnFocusedChanged;
@@ -82,7 +93,7 @@ namespace BhModule.WebPeeper
             Browser.UrlLoadError += OnUrlLoadError;
             Browser.FullscreenModeChanged += OnFullscreenModeChange;
         }
-        void LoadContextCreatedScript()
+        void SetContextCreatedScript()
         {
             using var fileStream = WebPeeperModule.Instance.ContentsManager.GetFileStream("onContextCreated.js") as MemoryStream;
             using TextReader reader = new StreamReader(fileStream, Encoding.UTF8);
@@ -114,23 +125,23 @@ namespace BhModule.WebPeeper
         void SetupCefSharpDllFolder()
         {
             var isDefaultVersion = _currentVersion == _defaultVersion;
-            _pendingResolveAssemblies.Add("CefHelper", AssemblyLoadType.Bytes);
+            _pendingResolveDlls.Add("CefHelper", AssemblyLoadType.Bytes);
             if (isDefaultVersion)
             {
                 // will priority load CefSharp.dll in CefSharp.Core.Runtime.dll located folder when load CefSharp.Core.Runtime.dll,
                 // lead to load same dll twice, one is through bytes (cannot identify same file) another through path
-                _pendingResolveAssemblies.Add("CefSharp", AssemblyLoadType.Path);
-                _pendingResolveAssemblies.Add("CefSharp.OffScreen", AssemblyLoadType.Bytes);
-                _pendingResolveAssemblies.Add("CefSharp.Core", AssemblyLoadType.Bytes);
-                _pendingResolveAssemblies.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.OffScreen", AssemblyLoadType.Bytes);
+                _pendingResolveDlls.Add("CefSharp.Core", AssemblyLoadType.Bytes);
+                _pendingResolveDlls.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
             }
             else
             {
                 // doesnt use $PATH probing managed dll
-                _pendingResolveAssemblies.Add("CefSharp", AssemblyLoadType.Path);
-                _pendingResolveAssemblies.Add("CefSharp.OffScreen", AssemblyLoadType.Path);
-                _pendingResolveAssemblies.Add("CefSharp.Core", AssemblyLoadType.Path);
-                _pendingResolveAssemblies.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.OffScreen", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.Core", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
             }
             var version = _currentVersion.ToString();
             _cefSharpFolder = Path.Combine(CefSharpVersionsFolder, version);
@@ -141,13 +152,18 @@ namespace BhModule.WebPeeper
         }
         Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
         {
-            var target = new Regex("[^,]+").Match(args.Name).Value;
-            var pending = _pendingResolveAssemblies.TryGetValue(target, out AssemblyLoadType loadType);
+            var target = new AssemblyName(args.Name).Name;
+            var pending = _pendingResolveDlls.TryGetValue(target, out AssemblyLoadType loadType);
             if (!pending) return null;
             // Load(byte[]) never reused loaded, so drop loaded
             // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.assembly.load?view=net-8.0#system-reflection-assembly-load(system-byte())
-            _pendingResolveAssemblies.Remove(target);
-            target = new Regex("(\\.dll)*$", RegexOptions.IgnoreCase).Replace(target, ".dll");
+            _pendingResolveDlls.Remove(target);
+            target += ".dll";
+            if (!DllLoadStarted)
+            {
+                DllLoadStarted = true;
+                DllLoadStart?.Invoke(sender, EventArgs.Empty);
+            }
             if (loadType == AssemblyLoadType.Bytes)
             {
                 var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(Path.Combine(_cefSharpBhmPath, target));
@@ -161,7 +177,6 @@ namespace BhModule.WebPeeper
         }
         public Task<Texture2D> GetScreenshot()
         {
-            if (!Browser.Ready) return Task.FromResult<Texture2D>(null);
             return Browser.GetScreenshot().ContinueWith(t =>
             {
                 var bufferSize = t.Result.Length;
@@ -174,16 +189,14 @@ namespace BhModule.WebPeeper
         async public void CloseWebBrowser()
         {
             await WebPeeperModule.Instance.UiService.BrowserWindow.PrepareQuitBrowser();
-            if (Browser.Created) Browser.Close();
+            Browser.Close();
         }
         public void ApplyUserAgent()
         {
-            if (!Browser.Ready) return;
             Browser.SetMobileUserAgent(WebPeeperModule.Instance.Settings.IsMobileLayout.Value);
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
-            if (!Browser.Created) return;
             Browser.Dispose(); // make sure close for restart
         }
         Stream OnBlishHudSchemeRequested(string filePath)
@@ -221,7 +234,6 @@ namespace BhModule.WebPeeper
                 }
                 else
                 {
-                    if (!Browser.Ready) return;
                     Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
                 }
             }
@@ -233,6 +245,7 @@ namespace BhModule.WebPeeper
         }
         public Task<bool> CreateWebBrowser()
         {
+            SetEventHandlers();
             Browser.CefSettingInit(
                 _currentVersion == _defaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
                 CefSettingFolder,
@@ -256,5 +269,12 @@ namespace BhModule.WebPeeper
     {
         Bytes,
         Path
+    }
+    public enum CefAvailableVersion
+    {
+        [Description(" 103.0.90")]
+        v103,
+        [Description(" 143.0.90")]
+        v143
     }
 }

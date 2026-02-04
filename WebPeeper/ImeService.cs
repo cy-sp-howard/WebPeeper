@@ -26,7 +26,10 @@ namespace BhModule.WebPeeper
         {
             winHandle = handle;
             AssignHandle(winHandle);
-            WebPeeperModule.BlishHudInstance.Form.LostFocus += OnHudLostFocus;
+            WebPeeperModule.Instance.CefService.DllLoadStart += delegate
+            {
+                WebPeeperModule.BlishHudInstance.Form.LostFocus += OnHudLostFocus;
+            };
             GameService.Input.Mouse.LeftMouseButtonPressed += OnLeftMouseButtonPressed;
             GameService.Input.Mouse.LeftMouseButtonReleased += OnLeftMouseButtonReleased;
             _keybindsBackupMap.Add("KeyStateChanged", (v => { _keyStateChangedCloned = v; }, () => _keyStateChangedCloned));
@@ -42,29 +45,33 @@ namespace BhModule.WebPeeper
         }
         protected override void WndProc(ref Message m)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true && Browser.Ready)
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true)
             {
                 _m = m;
-                switch ((WM)_m.Msg)
-                {
-                    case WM.KEYUP:
-                    case WM.KEYDOWN:
-                    case WM.CHAR:
-                        Browser.SendKeyEvent(msg: _m.Msg, wParam64: _m.WParam, lParam64: _m.LParam);
-                        break;
-                    case WM.IME_COMPOSITION:
-                        SetCefComposition();
-                        return;
-                    case WM.IME_ENDCOMPOSITION:
-                        Browser.ImeSetComposition("", 0, []);
-                        Browser.ImeFinishComposingText();
-                        return;
-                    case WM.IME_STARTCOMPOSITION:
-                        return;
-                }
-                _m = new();
+                HandleMsg();
             }
             base.WndProc(ref m);
+        }
+        void HandleMsg()
+        {
+            switch ((WM)_m.Msg)
+            {
+                case WM.KEYUP:
+                case WM.KEYDOWN:
+                case WM.CHAR:
+                    Browser.SendKeyEvent(msg: _m.Msg, wParam64: _m.WParam, lParam64: _m.LParam);
+                    break;
+                case WM.IME_COMPOSITION:
+                    SetCefComposition();
+                    return;
+                case WM.IME_ENDCOMPOSITION:
+                    Browser.ImeSetComposition("", 0, []);
+                    Browser.ImeFinishComposingText();
+                    return;
+                case WM.IME_STARTCOMPOSITION:
+                    return;
+            }
+            _m = new();
         }
         bool LParmHasFlag(object flag)
         {
@@ -83,12 +90,10 @@ namespace BhModule.WebPeeper
         }
         void OnHudLostFocus(object sender, EventArgs e)
         {
-            if (!Browser.Ready) return;
             Browser.BlurInput();
         }
         void SetCefComposition()
         {
-            if(!Browser.Ready) return;
             if (GetCompositionText(GCS.RESULTSTR, out string text))
             {
                 Browser.ImeCommitText(text);
@@ -116,7 +121,7 @@ namespace BhModule.WebPeeper
         }
         void SetCompositionPostion()
         {
-            if (WebPainter.Instance is null || !Browser.Ready) return;
+            if (WebPainter.Instance is null) return;
             var x = WebPainter.Instance.LocationAtForm.X;
             var y = WebPainter.Instance.LocationAtForm.Y;
 
