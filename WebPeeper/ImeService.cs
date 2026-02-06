@@ -45,7 +45,7 @@ namespace BhModule.WebPeeper
         }
         protected override void WndProc(ref Message m)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true)
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true && WebPeeperModule.Instance.CefService.DllLoadStarted)
             {
                 _m = m;
                 HandleMsg();

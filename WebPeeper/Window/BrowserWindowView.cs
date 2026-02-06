@@ -6,7 +6,6 @@ using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
@@ -14,22 +13,21 @@ namespace BhModule.WebPeeper
     internal class BrowserWindowView : View
     {
         Container _window;
-        WindowContent _windowContent;
+        Container _windowContent;
         protected override void Build(Container window)
         {
             _window = window;
-            WebPeeperModule.Instance.CefService.CreateWebBrowser().ContinueWith(t =>
+            if (Warning.Accepted) ShowBrowser();
+            else
             {
-                // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
-                WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
+                _windowContent = new Warning(ShowBrowser)
                 {
-                    _windowContent = new WindowContent(_window.ContentRegion.Size)
-                    {
-                        Parent = window
-                    };
-                    _window.Resized += OnWindowResize;
-                });
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+                    Parent = _window,
+                    Size = _window.ContentRegion.Size
+                };
+                _windowContent.Disposed += delegate { _window.Resized -= OnWindowResize; };
+                _window.Resized += OnWindowResize;
+            }
         }
         void OnWindowResize(object sender, ResizedEventArgs evt)
         {
@@ -39,6 +37,22 @@ namespace BhModule.WebPeeper
         {
             _window.Resized -= OnWindowResize;
             _windowContent?.Dispose();
+        }
+        void ShowBrowser()
+        {
+            WebPeeperModule.Instance.CefService.CreateWebBrowser().ContinueWith(t =>
+            {
+                // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
+                WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
+                {
+                    _windowContent?.Dispose();
+                    _windowContent = new WindowContent(_window.ContentRegion.Size)
+                    {
+                        Parent = _window
+                    };
+                    _window.Resized += OnWindowResize;
+                });
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
         }
     }
     internal class NavigationBar : FlowPanel
@@ -208,9 +222,10 @@ namespace BhModule.WebPeeper
         }
         void CreateMainContent()
         {
-            if (Warning.Accepted) _mainContent = new WebPainter();
-            else _mainContent = new Warning(() => { CreateMainContent(); ResetMainContentRect(); });
-            _mainContent.Parent = this;
+            _mainContent = new WebPainter
+            {
+                Parent = this
+            };
             _mainContent.Click += delegate
             {
                 if (!_bookmarkPanel.Visible) return;

@@ -135,17 +135,7 @@ namespace BhModule.WebPeeper
             });
             return tcs.Task;
         }
-        void HandleHidden()
-        {
-            Browser.BlurInput();
-            if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
-            else if (Settings.IsAutoPauseWeb.Value)
-            {
-                Browser.WasHidden(true);
-            }
-            BookmarkPanel.Instance?.SetChildrenEditState(false);
-        }
-        protected override void OnShown(EventArgs e)
+        void HandleShown()
         {
             if (_firstShow)
             {
@@ -159,6 +149,20 @@ namespace BhModule.WebPeeper
             {
                 Browser.WasHidden(false);
             }
+        }
+        void HandleHidden()
+        {
+            Browser.BlurInput();
+            if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
+            else if (Settings.IsAutoPauseWeb.Value)
+            {
+                Browser.WasHidden(true);
+            }
+            BookmarkPanel.Instance?.SetChildrenEditState(false);
+        }
+        protected override void OnShown(EventArgs e)
+        {
+            if (CefService.DllLoadStarted) HandleShown();
             base.OnShown(e);
         }
         protected override void OnHidden(EventArgs e)

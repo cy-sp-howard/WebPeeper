@@ -1,6 +1,5 @@
 ﻿using Blish_HUD;
 using Blish_HUD.Controls;
-using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended.BitmapFonts;
@@ -13,11 +12,11 @@ namespace BhModule.WebPeeper.Window
         readonly WarningContent _content;
         readonly Checkbox _alwaysHideCheckbox;
         readonly StandardButton _acceptBtn;
-        readonly Action _createWebPainter;
+        readonly Action _showBrowser;
         static public bool Accepted = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
-        public Warning(Action createWebPainter)
+        public Warning(Action showBrowser)
         {
-            _createWebPainter = createWebPainter;
+            _showBrowser = showBrowser;
             FlowDirection = ControlFlowDirection.SingleTopToBottom;
             CanScroll = true;
             _content = new() { Parent = this, };
@@ -39,7 +38,6 @@ namespace BhModule.WebPeeper.Window
         {
             base.OnResized(e);
             RecalculateLayout();
-            Browser.SetBrowserSize(Width, Height);
         }
         public override void RecalculateLayout()
         {
@@ -55,7 +53,7 @@ namespace BhModule.WebPeeper.Window
         {
             Parent = null;
             Accepted = true;
-            _createWebPainter();
+            _showBrowser();
             WebPeeperModule.Instance.Settings.IsShowWarning.Value = !_alwaysHideCheckbox.Checked;
             Dispose();
         }

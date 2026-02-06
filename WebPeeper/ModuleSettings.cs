@@ -131,7 +131,7 @@ namespace BhModule.WebPeeper
         }
         void OnCaptureKeyboardActivated(object sender, EventArgs e)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true) return;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !WebPeeperModule.Instance.CefService.DllLoadStarted) return;
             FocusBHWindow();
         }
         void FocusBHWindow()
