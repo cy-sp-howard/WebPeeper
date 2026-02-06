@@ -69,6 +69,7 @@
     <Reference Include="System.Xml.ReaderWriter" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DownloadService.cs" />
     <Compile Include="ImeService.cs" />
     <Compile Include="Strings\UIService.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -138,12 +139,12 @@
     <WebPeeperBhmPath>$(OutDir)$(ProjectName).bhm</WebPeeperBhmPath>
     <TempPath>$(OutDir).bhm\</TempPath>
   </PropertyGroup>
-	<Target Name="BuildAnotherCefHelper" BeforeTargets="Build">
+  <Target Name="BuildAnotherCefHelper" BeforeTargets="Build">
     <ItemGroup>
       <CefVersions Include="143.0.90" />
     </ItemGroup>
-		<MSBuild Projects="..\CefHelper\CefHelper.csproj" Properties="CefVersion=%(CefVersions.Identity);CopyDir=$([System.IO.Path]::GetFullPath($(OutDir)))helpers\" Targets="Restore;Build" />
-	</Target>
+    <MSBuild Projects="..\CefHelper\CefHelper.csproj" Properties="CefVersion=%(CefVersions.Identity);CopyDir=$([System.IO.Path]::GetFullPath($(OutDir)))helpers\" Targets="Restore;Build" />
+  </Target>
   <Target Name="BuildWebPeeperModule" AfterTargets="Build">
     <Delete Files="$(WebPeeperBhmPath)" />
     <ItemGroup>

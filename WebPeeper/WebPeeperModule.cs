@@ -24,6 +24,7 @@ namespace BhModule.WebPeeper
         internal CefService CefService { get; private set; }
         internal ImeService ImeService { get; private set; }
         internal UiService UiService { get; private set; }
+        internal DownloadService DownloadService { get; private set; }
         internal ModuleSettings Settings { get; private set; }
         internal static BlishHud BlishHudInstance;
         internal static MenuItem InstanceSettingsMenuItem;
@@ -58,6 +59,7 @@ namespace BhModule.WebPeeper
             CefService = new CefService();
             ImeService = new ImeService(BlishHudInstance.FormHandle);
             UiService = new UiService();
+            DownloadService = new DownloadService();
         }
         protected override async Task LoadAsync()
         {
@@ -65,6 +67,7 @@ namespace BhModule.WebPeeper
             {
                 CefService.Load();
                 UiService.Load();
+                DownloadService.Load();
             });
         }
         protected override void Unload()
@@ -73,6 +76,7 @@ namespace BhModule.WebPeeper
             CefService?.Unload();
             ImeService?.Unload();
             UiService?.Unload();
+            DownloadService?.Unload();
         }
     }
 
