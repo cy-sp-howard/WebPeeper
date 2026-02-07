@@ -162,12 +162,12 @@ namespace BhModule.WebPeeper
         }
         protected override void OnShown(EventArgs e)
         {
-            if (CefService.DllLoadStarted) HandleShown();
+            if (CefService.LibLoatStarted) HandleShown();
             base.OnShown(e);
         }
         protected override void OnHidden(EventArgs e)
         {
-            if (CefService.DllLoadStarted) HandleHidden();
+            if (CefService.LibLoatStarted) HandleHidden();
             base.OnHidden(e);
         }
         public override void RecalculateLayout()

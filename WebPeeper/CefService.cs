@@ -18,37 +18,44 @@ namespace BhModule.WebPeeper
     {
         static readonly public string CefSettingFolder = DirectoryUtil.RegisterDirectory(WebPeeperModule.InstanceModuleManager.Manifest.Name.Replace(" ", "").ToLower());
         static readonly string _cefSharpVersionsFolder = DirectoryUtil.RegisterDirectory(CefSettingFolder, "CefVersions");
-        string _cefFolder;
-        private string _cefSharpFolder;
-        string _cefSharpBhmPath;
+        string _cefFolder = Path.Combine(_cefSharpVersionsFolder, CurrentVersion.ToString());
+        string _cefSharpFolder = Path.Combine(_cefSharpVersionsFolder, CurrentVersion.ToString());
+        string _cefSharpBhmPath = Path.Combine("cef", CurrentVersion.ToString());
         readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
-        public event EventHandler DllLoadStart;
-        public bool DllLoadStarted { get; private set; } = false;
-        static readonly Dictionary<CefAvailableVersion, CefVersion> _cefVersions = new() {
+        public event EventHandler LibLoadStart;
+        public bool LibLoatStarted { get; private set; } = false;
+        static readonly Dictionary<CefAvailableVersion, CefPkgVersion> _versions = new() {
             { CefAvailableVersion.v103, new("103.0.90","103.0.9") },
-            { CefAvailableVersion.v143, new("143.0.90","143.0.90") }
+            { CefAvailableVersion.v143, new("143.0.90","143.0.9") }
         };
-        static readonly CefVersion _suggestionVersion = _cefVersions[CefAvailableVersion.v143];
-        static public readonly CefVersion DefaultVersion = _cefVersions[CefAvailableVersion.v103];
-        public CefVersion CurrentVersion { get; private set; } = _cefVersions[WebPeeperModule.Instance.Settings.CefVersion.Value];
+        static public IReadOnlyDictionary<CefAvailableVersion, CefPkgVersion> Versions => _versions;
+        static readonly CefPkgVersion _suggestionVersion = Versions[CefAvailableVersion.v143];
+        static public readonly CefPkgVersion DefaultVersion = Versions[CefAvailableVersion.v103];
+        static public CefPkgVersion CurrentVersion { get; private set; } = Versions[WebPeeperModule.Instance.Settings.CefVersion.Value];
+
+        static bool IsDefaultVersion => CurrentVersion == DefaultVersion;
         public bool Outdated => CurrentVersion < _suggestionVersion;
         public string LastAddressInputText = "";
         public void Load()
         {
             CleanOldData();
+            ExtractFiles();
+            _ = WebPeeperModule.Instance.DownloadService.Download(CurrentVersion);
         }
         public void Unload()
         {
+            LibLoadStart = null;
             WebPeeperModule.BlishHudInstance.Exiting -= OnBlishHudExiting;
             AppDomain.CurrentDomain.AssemblyResolve -= CefSharpLibResolver;
-            if (DllLoadStarted) OnBlishHudExiting(this, EventArgs.Empty);
+            if (LibLoatStarted) OnBlishHudExiting(this, EventArgs.Empty);
         }
-        public void ChangeVersion()
+        public void ApplySettingVersion()
         {
-            if (DllLoadStarted) return;
-            CurrentVersion = _cefVersions[WebPeeperModule.Instance.Settings.CefVersion.Value];
+            var newVersion = Versions[WebPeeperModule.Instance.Settings.CefVersion.Value];
+            if (LibLoatStarted) return;
+            CurrentVersion = newVersion;
         }
-        public string GetCefSharpFolder(CefVersion version)
+        public string GetCefSharpFolder(CefPkgVersion version)
         {
             return Path.Combine(_cefSharpVersionsFolder, version.ToString());
         }
@@ -65,7 +72,7 @@ namespace BhModule.WebPeeper
             void setLibCefDllFolder(object s, EventArgs e)
             {
                 GameService.GameIntegration.Gw2Instance.Gw2Started -= setLibCefDllFolder;
-                if (CurrentVersion == DefaultVersion)
+                if (IsDefaultVersion)
                 {
 #if DEBUG
                     string userFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -74,12 +81,11 @@ namespace BhModule.WebPeeper
 #else
                     var gw2Folder = Path.GetDirectoryName(GameService.GameIntegration.Gw2Instance.Gw2Process.MainModule.FileName);
                     _cefFolder = Path.Combine(gw2Folder, "bin64\\cef");
-                    _cefLocalesPath = cefFolder;
 #endif
                 }
                 else
                 {
-                    _cefFolder = Path.Combine(_cefSharpVersionsFolder, CurrentVersion.ToString());
+                    _cefFolder = ChangePathDirectory(_cefFolder, $"{CurrentVersion}");
                 }
                 //Utils.SetDllDirectory(cefFolder); // not working in Wine
                 Environment.SetEnvironmentVariable("PATH", $"{_cefFolder};{Environment.GetEnvironmentVariable("PATH")}");
@@ -105,16 +111,10 @@ namespace BhModule.WebPeeper
             using TextReader reader = new StreamReader(fileStream, Encoding.UTF8);
             Browser.ContextCreatedScript = reader.ReadToEnd();
         }
-        void DownloadFiles()
-        {
-            var version = CurrentVersion.ToString();
-            // check file existed if not download
-            // check file not broken
-        }
         void ExtractFiles()
         {
             string[] files = ["CefSharp.dll", "CefSharp.BrowserSubprocess.Core.dll", "CefSharp.BrowserSubprocess.exe", "CefSharp.Core.Runtime.dll"];
-            string[] paths = [.. files.Select(f => Path.Combine(_cefSharpBhmPath, f))];
+            string[] paths = [.. files.Select(f => Path.Combine(ChangePathDirectory(_cefSharpBhmPath, $"{DefaultVersion}"), f))];
             Directory.CreateDirectory(_cefSharpFolder);
             foreach (var path in paths)
             {
@@ -131,7 +131,7 @@ namespace BhModule.WebPeeper
         void SetupCefSharpDllFolder()
         {
             _pendingResolveDlls.Add("CefHelper", AssemblyLoadType.Bytes);
-            if (CurrentVersion == DefaultVersion)
+            if (IsDefaultVersion)
             {
                 // will priority load CefSharp.dll in CefSharp.Core.Runtime.dll located folder when load CefSharp.Core.Runtime.dll,
                 // lead to load same dll twice, one is through bytes (cannot identify same file) another through path
@@ -148,11 +148,8 @@ namespace BhModule.WebPeeper
                 _pendingResolveDlls.Add("CefSharp.Core", AssemblyLoadType.Path);
                 _pendingResolveDlls.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
             }
-            var version = CurrentVersion.ToString();
-            _cefSharpFolder = Path.Combine(_cefSharpVersionsFolder, version);
-            _cefSharpBhmPath = Path.Combine("cef", version);
-            if (CurrentVersion == DefaultVersion) ExtractFiles();
-            else DownloadFiles();
+            _cefSharpFolder = ChangePathDirectory(_cefSharpFolder, $"{CurrentVersion}");
+            _cefSharpBhmPath = ChangePathDirectory(_cefSharpBhmPath, $"{CurrentVersion}");
             AppDomain.CurrentDomain.AssemblyResolve += CefSharpLibResolver;
         }
         Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
@@ -240,23 +237,27 @@ namespace BhModule.WebPeeper
             if (isFullscreen) NavigationBar.Instance?.Hide();
             else NavigationBar.Instance?.Show();
         }
-        public Task CreateWebBrowser()
+        string ChangePathDirectory(string path, string directoryName)
+        {
+            return Path.Combine(Path.GetDirectoryName(path), directoryName);
+        }
+        void SetupLib()
+        {
+            if (LibLoatStarted) return;
+            LibLoatStarted = true;
+            LibLoadStart?.Invoke(this, EventArgs.Empty);
+            SetupCefDllPath();
+            SetupCefSharpDllFolder();
+            SetupEventHandlers();
+        }
+        Task CreateWebBrowser()
         {
             var tcs = new TaskCompletionSource<bool>();
             try
             {
-                if (!DllLoadStarted)
-                {
-                    DllLoadStarted = true;
-                    DllLoadStart?.Invoke(this, EventArgs.Empty);
-                    SetupCefDllPath();
-                    SetupCefSharpDllFolder();
-                    SetupEventHandlers();
-                }
-
                 var settings = WebPeeperModule.Instance.Settings;
                 Browser.CefSettingInit(
-                     CurrentVersion == DefaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
+                    IsDefaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
                     CefSettingFolder,
                     _cefSharpFolder,
                     settings.IsCleanMode.Value
@@ -290,8 +291,13 @@ namespace BhModule.WebPeeper
             }
             return tcs.Task;
         }
+        public async Task StartBrowsing()
+        {
+            SetupLib();
+            await CreateWebBrowser();
+        }
     }
-    internal class CefVersion(string cefSharpversion, string cefVersion = "")
+    internal class CefPkgVersion(string cefSharpversion, string cefVersion = "")
     {
         readonly public Version CefSharp = new(cefSharpversion);
         readonly public Version Cef = new(string.IsNullOrEmpty(cefVersion) ? cefSharpversion : cefVersion);
@@ -301,7 +307,7 @@ namespace BhModule.WebPeeper
         }
         public override bool Equals(object obj)
         {
-            if (obj is CefVersion cefVerObj)
+            if (obj is CefPkgVersion cefVerObj)
             {
                 return cefVerObj == this;
             }
@@ -311,27 +317,27 @@ namespace BhModule.WebPeeper
         {
             return this.CefSharp.GetHashCode();
         }
-        public static bool operator >(CefVersion v1, CefVersion v2)
+        public static bool operator >(CefPkgVersion v1, CefPkgVersion v2)
         {
             return v1.CefSharp > v2.CefSharp;
         }
-        public static bool operator <(CefVersion v1, CefVersion v2)
+        public static bool operator <(CefPkgVersion v1, CefPkgVersion v2)
         {
             return v1.CefSharp < v2.CefSharp;
         }
-        public static bool operator >=(CefVersion v1, CefVersion v2)
+        public static bool operator >=(CefPkgVersion v1, CefPkgVersion v2)
         {
             return v1.CefSharp > v2.CefSharp;
         }
-        public static bool operator <=(CefVersion v1, CefVersion v2)
+        public static bool operator <=(CefPkgVersion v1, CefPkgVersion v2)
         {
             return v1.CefSharp < v2.CefSharp;
         }
-        public static bool operator ==(CefVersion v1, CefVersion v2)
+        public static bool operator ==(CefPkgVersion v1, CefPkgVersion v2)
         {
             return v1.CefSharp == v2.CefSharp;
         }
-        public static bool operator !=(CefVersion v1, CefVersion v2)
+        public static bool operator !=(CefPkgVersion v1, CefPkgVersion v2)
         {
             return v1.CefSharp != v2.CefSharp;
         }

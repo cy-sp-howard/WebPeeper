@@ -13,34 +13,59 @@ namespace BhModule.WebPeeper
     internal class BrowserWindowView : View
     {
         Container _window;
-        Container _windowContent;
+        Control _windowContent;
         protected override void Build(Container window)
         {
             _window = window;
-            if (Warning.Accepted) ShowBrowser();
+            _window.ContentResized += OnWindowResize;
+            if (WebPeeperModule.Instance.CefService.Outdated)
+            {
+                if (Warning.Accepted) ShowBrowser();
+                else
+                {
+                    _windowContent = new Warning(ShowBrowser)
+                    {
+                        Parent = _window,
+                        Size = _window.ContentRegion.Size
+                    };
+                }
+            }
             else
             {
-                _windowContent = new Warning(ShowBrowser)
+                var downloadService = WebPeeperModule.Instance.DownloadService;
+                var downloaded = downloadService.CheckCefLib(CefService.CurrentVersion);
+                if (!downloaded) _ = downloadService.Download(CefService.CurrentVersion);
+                if (downloadService.Downloading || !downloaded)
                 {
-                    Parent = _window,
-                    Size = _window.ContentRegion.Size
-                };
-                _windowContent.Disposed += delegate { _window.Resized -= OnWindowResize; };
-                _window.Resized += OnWindowResize;
+                    var bar = new ProgressBar(() => downloadService.ProgressPercentage)
+                    {
+                        Text = "Downloading files...",
+                        Parent = _window,
+                        Size = _window.ContentRegion.Size,
+                        BarSize = new(150, 30)
+                    };
+                    bar.ProgressUpdated += (s, e) =>
+                    {
+                        if (e.NewValue >= 1) ShowBrowser();
+                    };
+                    _windowContent = bar;
+                }
+                else ShowBrowser();
             }
         }
-        void OnWindowResize(object sender, ResizedEventArgs evt)
+        void OnWindowResize(object sender, RegionChangedEventArgs evt)
         {
-            _windowContent.Size = _window.ContentRegion.Size;
+            if (_windowContent is null) return;
+            _windowContent.Size = evt.CurrentRegion.Size;
         }
         protected override void Unload()
         {
-            _window.Resized -= OnWindowResize;
+            _window.ContentResized -= OnWindowResize;
             _windowContent?.Dispose();
         }
         void ShowBrowser()
         {
-            WebPeeperModule.Instance.CefService.CreateWebBrowser().ContinueWith(t =>
+            WebPeeperModule.Instance.CefService.StartBrowsing().ContinueWith(t =>
             {
                 // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
                 WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
@@ -50,7 +75,6 @@ namespace BhModule.WebPeeper
                     {
                         Parent = _window
                     };
-                    _window.Resized += OnWindowResize;
                 });
             }, TaskContinuationOptions.OnlyOnRanToCompletion);
         }
