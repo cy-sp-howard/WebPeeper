@@ -19,19 +19,23 @@ namespace BhModule.WebPeeper
 {
     public class CefService
     {
+        public string CefSharpDllPath;
+        public string CefSettingFolder;
+
         private ChromiumWebBrowser _webBrowser;
         public ChromiumWebBrowser WebBrowser { get => _webBrowser; }
         public InputMethod InputMethod { get => _inputMethod; }
         readonly InputMethod _inputMethod;
         public string LastAddressInputText = "";
-        static public string CefSharpDllPath = DirectoryUtil.RegisterDirectory(DirectoryUtil.CachePath, "cefsharp/");
-        static public string CefSettingFolder = DirectoryUtil.RegisterDirectory(WebPeeperModule.InstanceModuleManager.Manifest.Name.Replace(" ", "").ToLower());
+
         const string _mobileUserAgent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Mobile Safari/537.36";
         const string _defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36";
         string OnContextCreatedScript;
         string _cefLocalesPath;
         public CefService()
         {
+            CefSharpDllPath = DirectoryUtil.RegisterDirectory(DirectoryUtil.CachePath, "cefsharp/");
+            CefSettingFolder = WebPeeperModule.Instance.DirectoriesManager.GetFullDirectoryPath("webpeeper");
             SetupCefDllPath();
             SetupCefSharpDllFolder();
             _inputMethod = new InputMethod();
@@ -85,12 +89,29 @@ namespace BhModule.WebPeeper
             settings.CefCommandLineArgs.Add("gpu-preferences"); // not sure what is it, but gw2 cefhost.exe uses it
             if (WebPeeperModule.Instance.Settings.IsCleanMode.Value)
             {
-                Directory.Delete(settings.CachePath, true);
-                Directory.Delete(settings.UserDataPath, true);
+                ClearDirectory(settings.CachePath);
+                ClearDirectory(settings.UserDataPath);
             }
             settings.PersistSessionCookies = true;
             CefHelper.Default.SetCefSchemeHandler(settings, OnBlishHudSchemeRequested);
             Cef.Initialize(settings);
+        }
+        void ClearDirectory(string path)
+        {
+            if (!Directory.Exists(path)) return;
+
+            var dir = new DirectoryInfo(path);
+
+            foreach (FileInfo file in dir.GetFiles())
+            {
+                file.IsReadOnly = false;
+                file.Delete();
+            }
+
+            foreach (DirectoryInfo subDir in dir.GetDirectories())
+            {
+                subDir.Delete(true);
+            }
         }
         void LoadOnContextCreatedScript()
         {

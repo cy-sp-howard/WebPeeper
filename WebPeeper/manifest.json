@@ -9,6 +9,11 @@
     "bh.blishhud": ">=1.2.0"
   },
   "url": "https://github.com/cy-sp-howard/WebPeeper",
+  "directories": [
+    "webpeeper",
+    "webpeeper\\CefCache",
+    "webpeeper\\CefUserData"
+  ],
   "contributors": [
     {
       "name": "yeh"
