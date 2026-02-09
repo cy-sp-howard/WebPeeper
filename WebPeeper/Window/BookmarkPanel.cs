@@ -176,7 +176,7 @@ namespace BhModule.WebPeeper
         void SetBtnsLocation()
         {
             _editBtn.Location = new(Location.X + 10, Location.Y + 10);
-            _addBtn.Location = new(Location.X + Width - 50, _editBtn.Location.Y);
+            _addBtn.Location = new(Location.X + Width - 25, _editBtn.Location.Y);
         }
         void HideBtns()
         {

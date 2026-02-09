@@ -12,11 +12,10 @@ namespace BhModule.WebPeeper.Window
         readonly WarningContent _content;
         readonly Checkbox _alwaysHideCheckbox;
         readonly StandardButton _acceptBtn;
-        readonly Action _showBrowser;
-        static public bool Accepted = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
-        public Warning(Action showBrowser)
+        public event EventHandler<EventArgs> Accepted;
+        static public bool IsAccepted = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
+        public Warning()
         {
-            _showBrowser = showBrowser;
             FlowDirection = ControlFlowDirection.SingleTopToBottom;
             CanScroll = true;
             _content = new() { Parent = this, };
@@ -51,11 +50,15 @@ namespace BhModule.WebPeeper.Window
         }
         void Accept()
         {
-            Parent = null;
-            Accepted = true;
-            _showBrowser();
+            IsAccepted = true;
+            Accepted?.Invoke(this, EventArgs.Empty);
             WebPeeperModule.Instance.Settings.IsShowWarning.Value = !_alwaysHideCheckbox.Checked;
             Dispose();
+        }
+        protected override void DisposeControl()
+        {
+            Accepted = null;
+            base.DisposeControl();
         }
     }
     internal class WarningContent : Control

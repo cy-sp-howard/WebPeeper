@@ -65,9 +65,9 @@ namespace BhModule.WebPeeper
         {
             await Task.Run(() =>
             {
+                Settings.Load();
                 CefService.Load();
                 UiService.Load();
-                DownloadService.Load();
             });
         }
         protected override void Unload()
@@ -76,7 +76,6 @@ namespace BhModule.WebPeeper
             CefService?.Unload();
             ImeService?.Unload();
             UiService?.Unload();
-            DownloadService?.Unload();
         }
     }
 

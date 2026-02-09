@@ -28,6 +28,7 @@ namespace BhModule.WebPeeper
         public SettingEntry<KeyBinding> ZoomOutKey { get; private set; }
         public SettingEntry<KeyBinding> CaptureKeyboardKey { get; private set; }
         public SettingEntry<CefAvailableVersion> CefVersion { get; private set; }
+        public SettingEntry<CefAvailableVersion> CefErrorVersion { get; private set; }
         public SettingEntry<string> HomeUrl { get; private set; }
         public SettingEntry<string> SearchUrl { get; private set; }
         public SettingEntry<string> WebBgColor { get; private set; }
@@ -41,10 +42,6 @@ namespace BhModule.WebPeeper
         public SettingEntry<bool> IsBlockKeybinds { get; private set; }
         public SettingEntry<bool> IsShowWarning { get; private set; }
         public ModuleSettings(SettingCollection settings)
-        {
-            InitUISetting(settings);
-        }
-        void InitUISetting(SettingCollection settings)
         {
             SettingsKey = settings.DefineSetting(nameof(SettingsKey), new KeyBinding(ModifierKeys.Ctrl, Keys.F12), () => "Settings Toggle", () => "");
             SettingsKey.Value.Activated += ToggleSettings;
@@ -61,11 +58,12 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey = settings.DefineSetting(nameof(CaptureKeyboardKey), new KeyBinding(ModifierKeys.Ctrl, Keys.Space), () => "Focus the Blish-HUD Window", () => "For web input field, only works when the cursor is within the web area. In theory it would auto-focus when caret is flashing.");
             CaptureKeyboardKey.Value.Activated += OnCaptureKeyboardActivated;
             CaptureKeyboardKey.Value.Enabled = true;
-            CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => "Need to download additional files, about 200mb. Restart required.");
+            CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => $"Additional files (about 200 MB) need to be downloaded, excluding version {CefService.DefaultVersion}.");
             CefVersion.SettingChanged += (sender, e) =>
             {
                 WebPeeperModule.Instance.CefService.ApplySettingVersion();
             };
+            CefErrorVersion = settings.DefineSetting(nameof(CefErrorVersion), CefAvailableVersion.v103, () => "", () => "");
             SearchUrl = settings.DefineSetting(nameof(SearchUrl), _defaultSearchUrl, () => "Search Engine", () => "{text} is represent text variable.");
             SearchUrl.SettingChanged += (sender, e) =>
             {
@@ -96,20 +94,20 @@ namespace BhModule.WebPeeper
                 {
                     uiService.BrowserWindow.Opacity = e.NewValue;
                 }
-                WebPeeperSettingsView.UpdateWebWindowOpacityTitle();
+                WebPeeperSettingsView.UpdateWebWindowOpacityTitle?.Invoke();
             };
             IsAutoPauseWeb = settings.DefineSetting(nameof(IsAutoPauseWeb), false, () => "Pause the Web Process while Close the Web Window", () => "");
             IsAutoQuitProcess = settings.DefineSetting(nameof(IsAutoQuitProcess), false, () => "Quit the Web Process while Close the Web Window", () => "");
             IsAutoQuitProcess.SettingChanged += (sender, e) =>
             {
                 IsAutoPauseWeb.SetDisabled(e.NewValue);
-                WebPeeperSettingsView.UpdateIsAutoPauseWebState();
+                WebPeeperSettingsView.UpdateIsAutoPauseWebState?.Invoke();
             };
             IsAutoPauseWeb.SetDisabled(IsAutoQuitProcess.Value);
             IsMobileLayout = settings.DefineSetting(nameof(IsMobileLayout), true, () => "Use Mobile Website", () => "Whether use mobile User-Agent.");
             IsMobileLayout.SettingChanged += (s, e) =>
             {
-                if (!WebPeeperModule.Instance.CefService.LibLoatStarted) return;
+                if (!WebPeeperModule.Instance.CefService.LibLoadStarted) return;
                 WebPeeperModule.Instance.CefService.ApplyUserAgent();
             };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
@@ -118,6 +116,11 @@ namespace BhModule.WebPeeper
             IsBlockKeybinds = settings.DefineSetting(nameof(IsBlockKeybinds), true, () => "Block All Blish-HUD Keybinds while the Web is Accepting Input", () => "Uncheck if keybinds fail after typing.");
             IsShowWarning = settings.DefineSetting(nameof(IsShowWarning), true, () => "Show Outdated Warning", () => "");
         }
+        public void Load()
+        {
+            WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged += StartDownloadCef;
+            GameService.Overlay.BlishHudWindow.Hidden += StartDownloadCef;
+        }
         public void Unload()
         {
             SettingsKey.Value.Activated -= ToggleSettings;
@@ -125,6 +128,23 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey.Value.Activated -= OnCaptureKeyboardActivated;
             ZoomInKey.Value.Activated -= OnZoomInActivated;
             ZoomOutKey.Value.Activated -= OnZoomOutActivated;
+            WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= StartDownloadCef;
+            GameService.Overlay.BlishHudWindow.Hidden -= StartDownloadCef;
+        }
+        void StartDownloadCef(object sender, EventArgs e)
+        {
+            if (e is System.ComponentModel.PropertyChangedEventArgs propertyEvt
+                && (propertyEvt.PropertyName != "Selected"
+                || WebPeeperModule.InstanceSettingsMenuItem.Selected)
+                )
+            {
+                return;
+            }
+            _ = WebPeeperModule.Instance.DownloadService.Download(CefService.Versions[CefVersion.Value]);
+        }
+        public void RedownloadCef()
+        {
+            CefErrorVersion.Value = CefVersion.Value;
         }
         void ToggleSettings(object sender, EventArgs e)
         {
@@ -136,7 +156,7 @@ namespace BhModule.WebPeeper
         }
         void OnCaptureKeyboardActivated(object sender, EventArgs e)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !WebPeeperModule.Instance.CefService.LibLoatStarted) return;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !WebPeeperModule.Instance.CefService.LibLoadStarted) return;
             FocusBHWindow();
         }
         void FocusBHWindow()
@@ -166,10 +186,11 @@ namespace BhModule.WebPeeper
     // SettingsView never call Unload, so cannot bind event (v1.2.0).
     internal class WebPeeperSettingsView(SettingCollection settings) : View
     {
-        static public Action UpdateWebWindowOpacityTitle;
-        static public Action UpdateIsAutoPauseWebState;
+        static public Action UpdateWebWindowOpacityTitle { get; private set; }
+        static public Action UpdateIsAutoPauseWebState { get; private set; }
         FlowPanel _rootflowPanel;
         readonly SettingCollection _settings = settings;
+        readonly string[] _hiddenSettings = ["CefErrorVersion"];
         protected override void Build(Container buildPanel)
         {
             _rootflowPanel = new FlowPanel()
@@ -184,17 +205,18 @@ namespace BhModule.WebPeeper
                 Parent = buildPanel
             };
 
-            foreach (var setting in _settings.Where(s => s.SessionDefined))
+            foreach (var setting in _settings.Where(s => s.SessionDefined && !_hiddenSettings.Contains(s.EntryKey)))
             {
                 IView settingView = null;
                 if (setting.EntryKey == "WebBgColor" && setting is SettingEntry<string> stringSetting)
                 {
                     settingView = new HexColorSettingView(stringSetting, _rootflowPanel.Width);
                 }
-                if (setting.EntryKey == "CefVersion" && setting is SettingEntry<CefAvailableVersion> versionSetting)
+                else if (setting.EntryKey == "CefVersion" && setting is SettingEntry<CefAvailableVersion> versionSetting)
                 {
                     settingView = new CefVersionSettingView(versionSetting, _rootflowPanel.Width);
                 }
+
                 if (settingView is not null || (settingView = SettingView.FromType(setting, _rootflowPanel.Width)) is not null)
                 {
                     ViewContainer container = new()
@@ -221,8 +243,10 @@ namespace BhModule.WebPeeper
     }
     internal class CefVersionSettingView(SettingEntry<CefAvailableVersion> setting, int definedWidth = -1) : EnumSettingView<CefAvailableVersion>(setting, definedWidth)
     {
+        static public Action UpdateView { get; private set; }
         StandardButton _downloadBtn;
         StandardButton _deleteBtn;
+        Label _hint;
         ProgressBar _progressBar;
         CefPkgVersion Version => CefService.Versions[Value];
         DownloadService DownloadService => WebPeeperModule.Instance.DownloadService;
@@ -236,6 +260,7 @@ namespace BhModule.WebPeeper
                 Width = 100,
                 Height = 25,
                 Text = "Delete",
+                BasicTooltipText = "Clear downloaded files."
             };
             _deleteBtn.Click += delegate
             {
@@ -248,7 +273,8 @@ namespace BhModule.WebPeeper
                 Parent = buildPanel,
                 Width = 100,
                 Height = 25,
-                Text = "Download"
+                Text = "Download",
+                BasicTooltipText = "Download CefSharp packages from Nuget."
             };
             _downloadBtn.Click += delegate
             {
@@ -269,36 +295,58 @@ namespace BhModule.WebPeeper
                 _deleteBtn.Visible = true;
                 _progressBar.Visible = false;
             };
-            CheckDownloaded();
+            _hint = new Label()
+            {
+                Text = "Requires Blish-HUD restart.",
+                TextColor = Color.Yellow,
+                Parent = buildPanel,
+                AutoSizeWidth = true,
+                Top = 2
+            };
+
             selection.Moved += (s, e) =>
             {
                 _deleteBtn.Left = selection.Right + 5;
                 _downloadBtn.Left = selection.Right + 5;
                 _progressBar.Left = selection.Right + 5;
+                _hint.Left = selection.Right + 5;
             };
-            ValueChanged += delegate
-            {
-                CheckDownloaded();
-            };
+            ValueChanged += delegate { SetChildrenVisibleState(); };
+            SetChildrenVisibleState();
+            UpdateView = SetChildrenVisibleState;
         }
-        void CheckDownloaded()
+        void SetChildrenVisibleState()
         {
-            var downloaded = DownloadService.CheckCefLib(Version);
             var barVisible = false;
             var downloadVisible = false;
             var delVisible = false;
+            var hintVisible = false;
+
+            var isDownloaded = DownloadService.CheckCefLib(Version);
+            var isDownloading = DownloadService.DownloadingVersions.Contains(Version);
             var isDefaultVersion = Version == CefService.DefaultVersion;
-            var isUsingVersion = Version == CefService.CurrentVersion && WebPeeperModule.Instance.CefService.LibLoatStarted;
-            if (!downloaded)
+            var isCurrentVersion = Version == CefService.CurrentVersion;
+            var isLibLoaded = WebPeeperModule.Instance.CefService.LibLoadStarted;
+
+            if (isDownloading) barVisible = true;
+            else if (isDownloaded)
             {
-                var downloading = DownloadService.DownloadingVersions.Contains(Version);
-                if (downloading) barVisible = true;
-                else downloadVisible = true;
+                delVisible = !isDefaultVersion && !(isCurrentVersion && isLibLoaded);
             }
-            else if (!isDefaultVersion && !isUsingVersion) delVisible = true;
+            else downloadVisible = true;
+
+            if (!isCurrentVersion && isLibLoaded) hintVisible = true;
+
             _deleteBtn.Visible = delVisible;
             _downloadBtn.Visible = downloadVisible;
             _progressBar.Visible = barVisible;
+            _hint.Visible = hintVisible;
+            if (_deleteBtn.Visible || _downloadBtn.Visible)
+            {
+                _hint.Left = _downloadBtn.Right + 10;
+            }
+            else if (_progressBar.Visible) _hint.Left = _progressBar.Right + 10;
+            else _hint.Left = _downloadBtn.Left;
         }
     }
     internal class HexColorSettingView(SettingEntry<string> setting, int definedWidth = -1) : StringSettingView(setting, definedWidth)

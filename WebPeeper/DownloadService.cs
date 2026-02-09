@@ -25,8 +25,6 @@ namespace BhModule.WebPeeper
         {
             _progress = new Progress<float>(val => ProgressPercentage = val);
         }
-        public void Load() { }
-        public void Unload() { }
         public bool CheckCefLib(CefPkgVersion version)
         {
             if (version == CefService.DefaultVersion) return true;
@@ -49,7 +47,7 @@ namespace BhModule.WebPeeper
         }
         public void Delete(CefPkgVersion version)
         {
-            var isUsing = CefService.LibLoatStarted && version == CefService.CurrentVersion;
+            var isUsing = CefService.LibLoadStarted && version == CefService.CurrentVersion;
             var isDefault = version == CefService.DefaultVersion;
             if (isUsing || isDefault) return;
             try
@@ -60,66 +58,79 @@ namespace BhModule.WebPeeper
         }
         public async Task Download(CefPkgVersion cefPkgVersion)
         {
-            var downloaded = CheckCefLib(cefPkgVersion);
-            var downloading = _downloadingVersions.Contains(cefPkgVersion);
-            if (downloaded || downloading) return;
-            if (_downloadingCount == 0) _progress.Report(0);
-            using var client = new HttpClient();
-            // https://learn.microsoft.com/en-us/nuget/api/overview#service-index
-            var serviceIndexJson = await client.GetStringAsync("https://api.nuget.org/v3/index.json");
-            var serviceIndex = JsonSerializer.Deserialize<NugetIndex>(serviceIndexJson);
-            // https://learn.microsoft.com/en-us/nuget/api/package-base-address-resource
-            var baseAddressResource = serviceIndex.Resources.First(r => r.Type?.Contains("PackageBaseAddress") == true);
-            string nugetHostUrl = baseAddressResource.Id;
+            try
+            {
+                var downloaded = CheckCefLib(cefPkgVersion);
+                var downloading = _downloadingVersions.Contains(cefPkgVersion);
+                if (downloaded || downloading) return;
+                if (_downloadingCount == 0) _progress.Report(0);
+                using var client = new HttpClient();
+                // https://learn.microsoft.com/en-us/nuget/api/overview#service-index
+                var serviceIndexJson = await client.GetStringAsync("https://api.nuget.org/v3/index.json");
+                var serviceIndex = JsonSerializer.Deserialize<NugetIndex>(serviceIndexJson);
+                // https://learn.microsoft.com/en-us/nuget/api/package-base-address-resource
+                var baseAddressResource = serviceIndex.Resources.First(r => r.Type?.Contains("PackageBaseAddress") == true);
+                string nugetHostUrl = baseAddressResource.Id;
 
-            Package[] packages = [
-                new("CefSharp.OffScreen", version: cefPkgVersion.CefSharp, files: ["lib/net462/"]),
+                Package[] packages = [
+                    new("CefSharp.OffScreen", version: cefPkgVersion.CefSharp, files: ["lib/net462/"]),
                 new("CefSharp.Common", version: cefPkgVersion.CefSharp, files:["CefSharp/x64/","lib/net462/"]),
                 new("chromiumembeddedframework.runtime.win-x64", version: cefPkgVersion.Cef, files: ["CEF/win-x64/","runtimes/win-x64/native/"])
-                ];
-            _downloadingCount += packages.Length;
-            _downloadingVersions.Add(cefPkgVersion);
-            foreach (var package in packages)
-            {
-                var packageLowerID = package.Name.ToLowerInvariant();
-                string nupkgUrl = $"{nugetHostUrl}{packageLowerID}/{package.Version}/{packageLowerID}.{package.Version}.nupkg";
-                using var nupkgUrlResp = await client.GetAsync(nupkgUrl, HttpCompletionOption.ResponseHeadersRead);
-
-                var nupkgFileSize = (int)(nupkgUrlResp.Content.Headers.ContentLength ?? 0);
-                using var nupkgFileStream = await nupkgUrlResp.Content.ReadAsStreamAsync();
-
-                using MemoryStream downloadedStream = new();
-                _ = nupkgFileStream.CopyToAsync(downloadedStream);
-                while (downloadedStream.Length < nupkgFileSize)
+                    ];
+                _downloadingCount += packages.Length;
+                _downloadingVersions.Add(cefPkgVersion);
+                CefVersionSettingView.UpdateView?.Invoke();
+                foreach (var package in packages)
                 {
-                    await Task.Delay(50);
-                    _progress.Report((((float)downloadedStream.Length / nupkgFileSize) + _downloadedCount) / packages.Length);
-                }
-                using var zip = new ZipArchive(downloadedStream, ZipArchiveMode.Read);
-                foreach (var entry in zip.Entries)
-                {
-                    if (_exludeExtractExts.Contains(Path.GetExtension(entry.Name).ToLower())) continue;
-                    foreach (var path in package.PendingFiles.ToArray())
+                    var packageLowerID = package.Name.ToLowerInvariant();
+                    string nupkgUrl = $"{nugetHostUrl}{packageLowerID}/{package.Version}/{packageLowerID}.{package.Version}.nupkg";
+                    using var nupkgUrlResp = await client.GetAsync(nupkgUrl, HttpCompletionOption.ResponseHeadersRead);
+
+                    var nupkgFileSize = (int)(nupkgUrlResp.Content.Headers.ContentLength ?? 0);
+                    using var nupkgFileStream = await nupkgUrlResp.Content.ReadAsStreamAsync();
+
+                    using MemoryStream downloadedStream = new();
+                    _ = nupkgFileStream.CopyToAsync(downloadedStream);
+                    while (downloadedStream.Length < nupkgFileSize)
                     {
-                        var isTarget = entry.FullName.IndexOf(path) == 0;
-                        if (isTarget)
+                        await Task.Delay(50);
+                        var percentage = (((float)downloadedStream.Length / nupkgFileSize) + _downloadedCount) / packages.Length;
+                        if (percentage < 1) _progress.Report(percentage); // 100% after extract all files
+                    }
+                    using var zip = new ZipArchive(downloadedStream, ZipArchiveMode.Read);
+                    foreach (var entry in zip.Entries)
+                    {
+                        if (_exludeExtractExts.Contains(Path.GetExtension(entry.Name).ToLower())) continue;
+                        foreach (var path in package.PendingFiles.ToArray())
                         {
-                            string dest = Path.Combine(CefService.GetCefSharpFolder(cefPkgVersion), entry.FullName.Replace(path, ""));
-                            Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                            using var stream = entry.Open();
-                            using var fileStream = new FileStream(dest, FileMode.Create, FileAccess.Write);
-                            stream.CopyTo(fileStream);
+                            var isTarget = entry.FullName.IndexOf(path) == 0;
+                            if (isTarget)
+                            {
+                                await Task.Run(() =>
+                                {
+                                    string destination = Path.Combine(CefService.GetCefSharpFolder(cefPkgVersion), entry.FullName.Replace(path, ""));
+                                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                                    using var stream = entry.Open();
+                                    using var fileStream = new FileStream(destination, FileMode.Create, FileAccess.Write);
+                                    stream.CopyTo(fileStream);
+                                });
+                            }
                         }
                     }
+                    _downloadedCount += 1;
                 }
-                _downloadedCount += 1;
+                if (_downloadedCount == _downloadingCount)
+                {
+                    _downloadedCount = 0;
+                    _downloadingCount = 0;
+                    _downloadingVersions.Clear();
+                    _progress.Report(1);
+                }
             }
-            if (_downloadedCount == _downloadingCount)
+            catch (Exception ex)
             {
-                _downloadedCount = 0;
-                _downloadingCount = 0;
-                _downloadingVersions.Clear();
-                _progress.Report(1);
+                WebPeeperModule.Logger.Error(ex.Message);
+                throw;
             }
         }
     }

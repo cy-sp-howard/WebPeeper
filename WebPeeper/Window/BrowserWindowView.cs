@@ -20,14 +20,16 @@ namespace BhModule.WebPeeper
             _window.ContentResized += OnWindowResize;
             if (WebPeeperModule.Instance.CefService.Outdated)
             {
-                if (Warning.Accepted) ShowBrowser();
+                if (Warning.IsAccepted) ShowBrowser();
                 else
                 {
-                    _windowContent = new Warning(ShowBrowser)
+                    var warning = new Warning()
                     {
                         Parent = _window,
                         Size = _window.ContentRegion.Size
                     };
+                    warning.Accepted += (s, e) => { ShowBrowser(); };
+                    _windowContent = warning;
                 }
             }
             else
@@ -46,7 +48,7 @@ namespace BhModule.WebPeeper
                     };
                     bar.ProgressUpdated += (s, e) =>
                     {
-                        if (e.NewValue >= 1) ShowBrowser();
+                        if (e.NewValue >= 1 && window.Visible) ShowBrowser();
                     };
                     _windowContent = bar;
                 }
