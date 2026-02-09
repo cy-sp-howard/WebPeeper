@@ -20,40 +20,9 @@ namespace BhModule.WebPeeper
             _window.ContentResized += OnWindowResize;
             if (WebPeeperModule.Instance.CefService.Outdated)
             {
-                if (Warning.IsAccepted) ShowBrowser();
-                else
-                {
-                    var warning = new Warning()
-                    {
-                        Parent = _window,
-                        Size = _window.ContentRegion.Size
-                    };
-                    warning.Accepted += (s, e) => { ShowBrowser(); };
-                    _windowContent = warning;
-                }
+                ShowOutdatedWarning();
             }
-            else
-            {
-                var downloadService = WebPeeperModule.Instance.DownloadService;
-                var downloaded = downloadService.CheckCefLib(CefService.CurrentVersion);
-                if (!downloaded) _ = downloadService.Download(CefService.CurrentVersion);
-                if (downloadService.Downloading || !downloaded)
-                {
-                    var bar = new ProgressBar(() => downloadService.ProgressPercentage)
-                    {
-                        Text = "Downloading files...",
-                        Parent = _window,
-                        Size = _window.ContentRegion.Size,
-                        BarSize = new(150, 30)
-                    };
-                    bar.ProgressUpdated += (s, e) =>
-                    {
-                        if (e.NewValue >= 1 && window.Visible) ShowBrowser();
-                    };
-                    _windowContent = bar;
-                }
-                else ShowBrowser();
-            }
+            else ShowDownloadProgress();
         }
         void OnWindowResize(object sender, RegionChangedEventArgs evt)
         {
@@ -64,6 +33,43 @@ namespace BhModule.WebPeeper
         {
             _window.ContentResized -= OnWindowResize;
             _windowContent?.Dispose();
+        }
+        void ShowOutdatedWarning()
+        {
+            if (Warning.IsAccepted) ShowDownloadProgress();
+            else
+            {
+                _ = WebPeeperModule.Instance.DownloadService.Download(CefService.CurrentVersion);
+                var warning = new Warning()
+                {
+                    Parent = _window,
+                    Size = _window.ContentRegion.Size
+                };
+                warning.Accepted += (s, e) => { ShowDownloadProgress(); };
+                _windowContent = warning;
+            }
+        }
+        void ShowDownloadProgress()
+        {
+            var downloadService = WebPeeperModule.Instance.DownloadService;
+            var downloaded = downloadService.CheckCefLib(CefService.CurrentVersion); // cant get correct Downloading state, due to async Download so check here
+            if (!downloaded) _ = downloadService.Download(CefService.CurrentVersion);
+            if (downloadService.Downloading || !downloaded)
+            {
+                var bar = new ProgressBar(() => downloadService.ProgressPercentage)
+                {
+                    Text = "Downloading files...",
+                    Parent = _window,
+                    Size = _window.ContentRegion.Size,
+                    BarSize = new(150, 30)
+                };
+                bar.ProgressUpdated += (s, e) =>
+                {
+                    if (e.NewValue >= 1 && _window.Visible) ShowBrowser();
+                };
+                _windowContent = bar;
+            }
+            else ShowBrowser();
         }
         void ShowBrowser()
         {

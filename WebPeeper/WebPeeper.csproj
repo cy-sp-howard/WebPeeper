@@ -143,6 +143,7 @@
   <Target Name="BuildAnotherCefHelper" BeforeTargets="Build">
     <ItemGroup>
       <CefVersions Include="143.0.90" />
+      <CefVersions Include="144.0.120" />
     </ItemGroup>
     <MSBuild Projects="..\CefHelper\CefHelper.csproj" Properties="CefVersion=%(CefVersions.Identity);CopyDir=$([System.IO.Path]::GetFullPath($(OutDir)))helpers\" Targets="Restore;Build" />
   </Target>

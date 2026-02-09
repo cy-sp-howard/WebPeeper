@@ -26,10 +26,11 @@ namespace BhModule.WebPeeper
         public bool LibLoadStarted { get; private set; } = false;
         static readonly Dictionary<CefAvailableVersion, CefPkgVersion> _versions = new() {
             { CefAvailableVersion.v103, new("103.0.90","103.0.9") },
-            { CefAvailableVersion.v143, new("143.0.90","143.0.9") }
+            { CefAvailableVersion.v143, new("143.0.90","143.0.9") },
+            { CefAvailableVersion.v144, new("144.0.120","144.0.12") },
         };
         static public IReadOnlyDictionary<CefAvailableVersion, CefPkgVersion> Versions => _versions;
-        static readonly CefPkgVersion _suggestionVersion = Versions[CefAvailableVersion.v143];
+        static readonly CefPkgVersion _suggestionVersion = Versions[CefAvailableVersion.v144];
         static public readonly CefPkgVersion DefaultVersion = Versions[CefAvailableVersion.v103];
         static public CefPkgVersion CurrentVersion { get; private set; } = Versions[WebPeeperModule.Instance.Settings.CefVersion.Value];
 
@@ -360,9 +361,11 @@ namespace BhModule.WebPeeper
     }
     public enum CefAvailableVersion
     {
-        [Description(" 103.0.90")]
-        v103,
+        [Description(" 144.0.120")]
+        v144,
         [Description(" 143.0.90")]
-        v143
+        v143,
+        [Description(" 103.0.90")]
+        v103
     }
 }

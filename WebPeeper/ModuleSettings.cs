@@ -130,6 +130,9 @@ namespace BhModule.WebPeeper
             ZoomOutKey.Value.Activated -= OnZoomOutActivated;
             WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= StartDownloadCef;
             GameService.Overlay.BlishHudWindow.Hidden -= StartDownloadCef;
+            WebPeeperSettingsView.UpdateWebWindowOpacityTitle = null;
+            WebPeeperSettingsView.UpdateIsAutoPauseWebState = null;
+            CefVersionSettingView.UpdateView = null;
         }
         void StartDownloadCef(object sender, EventArgs e)
         {
@@ -186,8 +189,8 @@ namespace BhModule.WebPeeper
     // SettingsView never call Unload, so cannot bind event (v1.2.0).
     internal class WebPeeperSettingsView(SettingCollection settings) : View
     {
-        static public Action UpdateWebWindowOpacityTitle { get; private set; }
-        static public Action UpdateIsAutoPauseWebState { get; private set; }
+        static public Action UpdateWebWindowOpacityTitle;
+        static public Action UpdateIsAutoPauseWebState;
         FlowPanel _rootflowPanel;
         readonly SettingCollection _settings = settings;
         readonly string[] _hiddenSettings = ["CefErrorVersion"];
@@ -243,7 +246,7 @@ namespace BhModule.WebPeeper
     }
     internal class CefVersionSettingView(SettingEntry<CefAvailableVersion> setting, int definedWidth = -1) : EnumSettingView<CefAvailableVersion>(setting, definedWidth)
     {
-        static public Action UpdateView { get; private set; }
+        static public Action UpdateView;
         StandardButton _downloadBtn;
         StandardButton _deleteBtn;
         Label _hint;
