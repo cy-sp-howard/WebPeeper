@@ -48,30 +48,36 @@ namespace BhModule.WebPeeper
             if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible == true && WebPeeperModule.Instance.CefService.LibLoadStarted)
             {
                 _m = m;
-                HandleMsg();
+                if (HandleMsg()) return;
             }
             base.WndProc(ref m);
         }
-        void HandleMsg()
+        bool HandleMsg()
         {
+            var handled = false;
             switch ((WM)_m.Msg)
             {
                 case WM.KEYUP:
                 case WM.KEYDOWN:
                 case WM.CHAR:
                     Browser.SendKeyEvent(msg: _m.Msg, wParam64: _m.WParam, lParam64: _m.LParam);
+                    handled = true;
                     break;
                 case WM.IME_COMPOSITION:
                     SetCefComposition();
-                    return;
+                    handled = true;
+                    break;
                 case WM.IME_ENDCOMPOSITION:
                     Browser.ImeSetComposition("", 0, []);
                     Browser.ImeFinishComposingText();
-                    return;
+                    handled = true;
+                    break;
                 case WM.IME_STARTCOMPOSITION:
-                    return;
+                    handled = true;
+                    break;
             }
             _m = new();
+            return handled;
         }
         bool LParmHasFlag(object flag)
         {

@@ -11,7 +11,7 @@ namespace BhModule.WebPeeper
     {
 
         [DllImport("imm32.dll")]
-        internal static extern IntPtr ImmAssociateContextEx(IntPtr hWnd, int hIMC, int iace);
+        internal static extern bool ImmAssociateContextEx(IntPtr hWnd, int hIMC, int iace);
         [DllImport("imm32.dll")]
         internal static extern IntPtr ImmGetContext(IntPtr hWnd);
         [DllImport("imm32.dll")]
