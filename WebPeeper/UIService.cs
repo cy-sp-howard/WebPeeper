@@ -60,7 +60,7 @@ namespace BhModule.WebPeeper
 
             var disposeBrowser = new ContextMenuStripItem("Quit Process");
             disposeBrowser.Click += delegate {
-                if (!WebPeeperModule.Instance.CefService.LibLoadStarted) return;
+                if (!CefService.LibLoadStarted) return;
                 WebPeeperModule.Instance.CefService.CloseWebBrowser(); 
             };
             yield return disposeBrowser;

@@ -23,7 +23,7 @@ namespace BhModule.WebPeeper
         string _cefSharpBhmPath = Path.Combine("cef", $"{CurrentVersion}");
         readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
         public event EventHandler LibLoadStart;
-        public bool LibLoadStarted { get; private set; } = false;
+        static public bool LibLoadStarted { get; private set; } = false;
         static readonly Dictionary<CefAvailableVersion, CefPkgVersion> _versions = new() {
             { CefAvailableVersion.v103, new("103.0.90","103.0.9") },
             { CefAvailableVersion.v143, new("143.0.90","143.0.9") },
@@ -94,7 +94,7 @@ namespace BhModule.WebPeeper
                 }
                 else
                 {
-                    _cefFolder = ChangePathDirectory(_cefFolder, $"{CurrentVersion}");
+                    _cefFolder = ChangePathTail(_cefFolder, $"{CurrentVersion}");
                 }
                 //Utils.SetDllDirectory(cefFolder); // not working in Wine
                 Environment.SetEnvironmentVariable("PATH", $"{_cefFolder};{Environment.GetEnvironmentVariable("PATH")}");
@@ -123,8 +123,8 @@ namespace BhModule.WebPeeper
         void ExtractFiles()
         {
             string[] files = ["CefSharp.dll", "CefSharp.BrowserSubprocess.Core.dll", "CefSharp.BrowserSubprocess.exe", "CefSharp.Core.Runtime.dll"];
-            string[] paths = [.. files.Select(f => Path.Combine(ChangePathDirectory(_cefSharpBhmPath, $"{DefaultVersion}"), f))];
-            var destinationFolder = ChangePathDirectory(_cefSharpFolder, $"{DefaultVersion}");
+            string[] paths = [.. files.Select(f => Path.Combine(ChangePathTail(_cefSharpBhmPath, $"{DefaultVersion}"), f))];
+            var destinationFolder = ChangePathTail(_cefSharpFolder, $"{DefaultVersion}");
             Directory.CreateDirectory(destinationFolder);
             foreach (var path in paths)
             {
@@ -158,8 +158,8 @@ namespace BhModule.WebPeeper
                 _pendingResolveDlls.Add("CefSharp.Core", AssemblyLoadType.Path);
                 _pendingResolveDlls.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
             }
-            _cefSharpFolder = ChangePathDirectory(_cefSharpFolder, $"{CurrentVersion}");
-            _cefSharpBhmPath = ChangePathDirectory(_cefSharpBhmPath, $"{CurrentVersion}");
+            _cefSharpFolder = ChangePathTail(_cefSharpFolder, $"{CurrentVersion}");
+            _cefSharpBhmPath = ChangePathTail(_cefSharpBhmPath, $"{CurrentVersion}");
             AppDomain.CurrentDomain.AssemblyResolve += CefSharpLibResolver;
         }
         Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
@@ -247,9 +247,9 @@ namespace BhModule.WebPeeper
             if (isFullscreen) NavigationBar.Instance?.Hide();
             else NavigationBar.Instance?.Show();
         }
-        string ChangePathDirectory(string path, string directoryName)
+        string ChangePathTail(string path, string directoryName)
         {
-            return Path.Combine(Path.GetDirectoryName(path), directoryName);
+            return Path.Combine(Path.GetDirectoryName(path) ?? "", directoryName);
         }
         void SetupLib()
         {

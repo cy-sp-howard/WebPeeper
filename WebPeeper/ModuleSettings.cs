@@ -107,7 +107,7 @@ namespace BhModule.WebPeeper
             IsMobileLayout = settings.DefineSetting(nameof(IsMobileLayout), true, () => "Use Mobile Website", () => "Whether use mobile User-Agent.");
             IsMobileLayout.SettingChanged += (s, e) =>
             {
-                if (!WebPeeperModule.Instance.CefService.LibLoadStarted) return;
+                if (!CefService.LibLoadStarted) return;
                 WebPeeperModule.Instance.CefService.ApplyUserAgent();
             };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
@@ -159,7 +159,7 @@ namespace BhModule.WebPeeper
         }
         void OnCaptureKeyboardActivated(object sender, EventArgs e)
         {
-            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !WebPeeperModule.Instance.CefService.LibLoadStarted) return;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true || !CefService.LibLoadStarted) return;
             FocusBHWindow();
         }
         void FocusBHWindow()
@@ -329,7 +329,7 @@ namespace BhModule.WebPeeper
             var isDownloading = DownloadService.DownloadingVersions.Contains(Version);
             var isDefaultVersion = Version == CefService.DefaultVersion;
             var isCurrentVersion = Version == CefService.CurrentVersion;
-            var isLibLoaded = WebPeeperModule.Instance.CefService.LibLoadStarted;
+            var isLibLoaded = CefService.LibLoadStarted;
 
             if (isDownloading) barVisible = true;
             else if (isDownloaded)
