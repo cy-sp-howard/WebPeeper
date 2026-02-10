@@ -13,7 +13,7 @@ namespace BhModule.WebPeeper.Window
         readonly Checkbox _alwaysHideCheckbox;
         readonly StandardButton _acceptBtn;
         public event EventHandler<EventArgs> Accepted;
-        static public bool IsAccepted = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
+        static public bool IsAccepted { get; private set; } = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
         public Warning()
         {
             FlowDirection = ControlFlowDirection.SingleTopToBottom;

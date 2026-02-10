@@ -17,7 +17,7 @@ namespace BhModule.WebPeeper
 {
     internal class BookmarkPanel : Panel
     {
-        static public BookmarkPanel Instance;
+        static public BookmarkPanel Instance { get; private set; }
         static readonly Point _bgOverSize = new(75, 50);
         static readonly Texture2D _bgTexture = Content.GetTexture("controls/window/502049");
         static readonly Texture2D _editBtnTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("edit.png");

@@ -25,7 +25,7 @@ namespace CefHelper
             FullscreenModeChanged?.Invoke(fullscreen);
         }
     }
-    class FocusBrowserAndUserAgentHandler : RequestHandler
+    class RequestHandler : CefSharp.Handler.RequestHandler
     {
         public bool IsMobile = false;
         public string MobileUserAgent = "";
@@ -81,7 +81,7 @@ namespace CefHelper
     {
         protected override CefReturnValue OnBeforeResourceLoad(IWebBrowser chromiumWebBrowser, IBrowser browser, IFrame frame, IRequest request, IRequestCallback callback)
         {
-            if (chromiumWebBrowser.RequestHandler is FocusBrowserAndUserAgentHandler handler)
+            if (chromiumWebBrowser.RequestHandler is RequestHandler handler)
             {
                 var mobileUserAgent = handler.MobileUserAgent;
                 if (string.IsNullOrWhiteSpace(mobileUserAgent))

@@ -54,7 +54,7 @@ namespace BhModule.WebPeeper
             if (form.IsDisposed || !form.IsHandleCreated) return;
             form.Invoke(cb);
         }
-        public static NotifyClass Notify = new();
+        public static readonly NotifyClass Notify = new();
     }
     [StructLayout(LayoutKind.Sequential)]
     public struct CompositionForm
@@ -67,8 +67,51 @@ namespace BhModule.WebPeeper
         public int Right;
         public int Bottom;
     }
-
-
+    internal class CefPkgVersion(string cefSharpversion, string cefVersion = "")
+    {
+        readonly public Version CefSharp = new(cefSharpversion);
+        readonly public Version Cef = new(string.IsNullOrEmpty(cefVersion) ? cefSharpversion : cefVersion);
+        public override string ToString()
+        {
+            return CefSharp.ToString();
+        }
+        public override bool Equals(object obj)
+        {
+            if (obj is CefPkgVersion cefVerObj)
+            {
+                return cefVerObj == this;
+            }
+            return false;
+        }
+        public override int GetHashCode()
+        {
+            return this.CefSharp.GetHashCode();
+        }
+        public static bool operator >(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp > v2.CefSharp;
+        }
+        public static bool operator <(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp < v2.CefSharp;
+        }
+        public static bool operator >=(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp > v2.CefSharp;
+        }
+        public static bool operator <=(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp < v2.CefSharp;
+        }
+        public static bool operator ==(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp == v2.CefSharp;
+        }
+        public static bool operator !=(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp != v2.CefSharp;
+        }
+    }
     internal class NotifyClass : Control
     {
         float _duration = 3000;

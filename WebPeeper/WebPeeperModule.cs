@@ -26,10 +26,10 @@ namespace BhModule.WebPeeper
         internal UiService UiService { get; private set; }
         internal DownloadService DownloadService { get; private set; }
         internal ModuleSettings Settings { get; private set; }
-        internal static BlishHud BlishHudInstance;
-        internal static MenuItem InstanceSettingsMenuItem;
-        internal static ModuleManager InstanceModuleManager;
-        internal static WebPeeperModule Instance;
+        internal static BlishHud BlishHudInstance { get; private set; }
+        internal static MenuItem InstanceSettingsMenuItem { get; private set; }
+        internal static ModuleManager InstanceModuleManager { get; private set; }
+        internal static WebPeeperModule Instance { get; private set; }
         [ImportingConstructor]
         public WebPeeperModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters)
         {

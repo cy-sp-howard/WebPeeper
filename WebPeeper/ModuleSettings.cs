@@ -67,12 +67,24 @@ namespace BhModule.WebPeeper
             SearchUrl = settings.DefineSetting(nameof(SearchUrl), _defaultSearchUrl, () => "Search Engine", () => "{text} is represent text variable.");
             SearchUrl.SettingChanged += (sender, e) =>
             {
-                if (string.IsNullOrWhiteSpace(e.NewValue)) Task.Delay(10).ContinueWith(_ => SearchUrl.Value = _defaultSearchUrl);
+                try
+                {
+                    var uriBuilder = new UriBuilder(e.NewValue);
+                    if ($"{uriBuilder.Uri}" == e.NewValue) return;
+                    Task.Delay(10).ContinueWith(_ => SearchUrl.Value = uriBuilder.Uri.AbsoluteUri);
+                }
+                catch { Task.Delay(10).ContinueWith(_ => SearchUrl.Value = _defaultSearchUrl); }
             };
             HomeUrl = settings.DefineSetting(nameof(HomeUrl), _defaultHomeUrl, () => "Home Page", () => "");
             HomeUrl.SettingChanged += (s, e) =>
             {
-                if (string.IsNullOrWhiteSpace(e.NewValue)) Task.Delay(10).ContinueWith(_ => HomeUrl.Value = _defaultHomeUrl);
+                try
+                {
+                    var uriBuilder = new UriBuilder(e.NewValue);
+                    if ($"{uriBuilder.Uri}" == e.NewValue) return;
+                    Task.Delay(10).ContinueWith(_ => HomeUrl.Value = uriBuilder.Uri.AbsoluteUri);
+                }
+                catch { Task.Delay(10).ContinueWith(_ => HomeUrl.Value = _defaultHomeUrl); }
             };
             WebBgColor = settings.DefineSetting(nameof(WebBgColor), _defaultBgColor, () => "Web Background      ", () => "Default is transparent.");
             WebBgColor.SetValidation((color) =>
@@ -118,8 +130,8 @@ namespace BhModule.WebPeeper
         }
         public void Load()
         {
-            WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged += StartDownloadCef;
-            GameService.Overlay.BlishHudWindow.Hidden += StartDownloadCef;
+            WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged += OnSettingsHidden;
+            GameService.Overlay.BlishHudWindow.Hidden += OnSettingsHidden;
         }
         public void Unload()
         {
@@ -128,13 +140,13 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey.Value.Activated -= OnCaptureKeyboardActivated;
             ZoomInKey.Value.Activated -= OnZoomInActivated;
             ZoomOutKey.Value.Activated -= OnZoomOutActivated;
-            WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= StartDownloadCef;
-            GameService.Overlay.BlishHudWindow.Hidden -= StartDownloadCef;
+            WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= OnSettingsHidden;
+            GameService.Overlay.BlishHudWindow.Hidden -= OnSettingsHidden;
             WebPeeperSettingsView.UpdateWebWindowOpacityTitle = null;
             WebPeeperSettingsView.UpdateIsAutoPauseWebState = null;
             CefVersionSettingView.UpdateView = null;
         }
-        void StartDownloadCef(object sender, EventArgs e)
+        void OnSettingsHidden(object sender, EventArgs e)
         {
             if (e is System.ComponentModel.PropertyChangedEventArgs propertyEvt
                 && (propertyEvt.PropertyName != "Selected"

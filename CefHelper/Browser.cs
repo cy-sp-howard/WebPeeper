@@ -102,7 +102,7 @@ namespace CefHelper
                     {
                         MainFrameChanged = () => { FocusedChanged?.Invoke(false); }
                     };
-                    _webBrowser.RequestHandler = new FocusBrowserAndUserAgentHandler() { IsMobile = isMobile };
+                    _webBrowser.RequestHandler = new RequestHandler() { IsMobile = isMobile };
                     _webBrowser.LifeSpanHandler = new PopupHandler();
                     _webBrowser.RenderProcessMessageHandler = new NodeFocusHandler()
                     {
@@ -143,7 +143,7 @@ namespace CefHelper
         }
         static public void LoadUrlAsync(string url)
         {
-            _webBrowser.LoadUrlAsync(url);
+            _webBrowser?.LoadUrlAsync(url);
         }
         static public void WasHidden(bool hidden)
         {
@@ -429,7 +429,7 @@ namespace CefHelper
         }
         static public void SetMobileUserAgent(bool mobile)
         {
-            if (_webBrowser?.RequestHandler is FocusBrowserAndUserAgentHandler handler)
+            if (_webBrowser?.RequestHandler is RequestHandler handler)
             {
                 handler.IsMobile = mobile;
             }

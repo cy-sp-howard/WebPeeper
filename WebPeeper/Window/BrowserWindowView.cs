@@ -89,7 +89,6 @@ namespace BhModule.WebPeeper
     }
     internal class NavigationBar : FlowPanel
     {
-        static public NavigationBar Instance;
         static readonly Texture2D _btnTexture = GameService.Content.GetTexture("784268");
         static readonly Texture2D _bookmarkBtnTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("bookmark.png");
         IconButton _backBtn;
@@ -100,17 +99,13 @@ namespace BhModule.WebPeeper
         public event EventHandler<EventArgs> BookmarkBtnClicked;
         public NavigationBar()
         {
-            Instance = this;
             Height = 30;
             SetChildren();
             Browser.GetFullscreenState().ContinueWith(t => { Visible = !t.Result; });
             Browser.LoadingStateChanged += HandleLoading;
             Browser.AddressChanged += HandleAddress;
-        }
-        public void SetAddressInputText(string text)
-        {
-            if (_addressInput is null) return;
-            _addressInput.Text = text;
+            Browser.UrlLoadError += HandleAddress;
+            Browser.FullscreenModeChanged += HandleFullscreen;
         }
         void SetChildren()
         {
@@ -148,8 +143,7 @@ namespace BhModule.WebPeeper
                     return;
                 }
                 HandleLoading(true, false, true); // err url lead to hide loading too quick, so show it early
-                WebPeeperModule.Instance.CefService.LastAddressInputText = _addressInput.Text;
-                Browser.LoadUrlAsync(WebPeeperModule.Instance.CefService.LastAddressInputText);
+                WebPeeperModule.Instance.CefService.Search(_addressInput.Text);
             };
             _addressInput.InputFocusChanged += (sender, e) =>
             {
@@ -189,6 +183,11 @@ namespace BhModule.WebPeeper
             if (_loading is null) return;
             _loading.Location = new Point(Width - _loading.Width, 0);
         }
+        void HandleFullscreen(bool isFullscreen)
+        {
+            if (isFullscreen) Hide();
+            else Show();
+        }
         void HandleAddress(string address)
         {
             _addressInput.Text = address;
@@ -215,6 +214,8 @@ namespace BhModule.WebPeeper
 
             Browser.LoadingStateChanged -= HandleLoading;
             Browser.AddressChanged -= HandleAddress;
+            Browser.UrlLoadError -= HandleAddress;
+            Browser.FullscreenModeChanged -= HandleFullscreen;
 
             BookmarkBtnClicked = null;
         }

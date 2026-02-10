@@ -7,9 +7,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
@@ -36,7 +38,6 @@ namespace BhModule.WebPeeper
 
         static bool IsDefaultVersion => CurrentVersion == DefaultVersion;
         public bool Outdated => CurrentVersion < _suggestionVersion;
-        public string LastAddressInputText = "";
         public void Load()
         {
             CleanOldData();
@@ -110,9 +111,6 @@ namespace BhModule.WebPeeper
             Browser.BlishHudSchemeRequested += OnBlishHudSchemeRequested;
             Browser.FocusedChanged += OnFocusedChanged;
             Browser.TitleChanged += OnTitleChanged;
-            Browser.FrameLoadStart += OnFrameLoadStart;
-            Browser.UrlLoadError += OnUrlLoadError;
-            Browser.FullscreenModeChanged += OnFullscreenModeChange;
         }
         void SetContextCreatedScript()
         {
@@ -193,10 +191,24 @@ namespace BhModule.WebPeeper
                 return Texture2D.FromStream(ctx.GraphicsDevice, memoryStream);
             });
         }
-        async public void CloseWebBrowser()
+        async public void Search(string text)
         {
-            await WebPeeperModule.Instance.UiService.BrowserWindow.PrepareQuitBrowser();
-            Browser.Close();
+            using var client = new HttpClient();
+            try
+            {
+                var isValidUrl = Uri.TryCreate(text, UriKind.Absolute, out Uri _);
+                if (!isValidUrl)
+                {
+                    var uriBuilder = new UriBuilder(text);
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    using var response = await client.GetAsync(uriBuilder.Uri, HttpCompletionOption.ResponseHeadersRead, cts.Token); // throw if status error
+                }
+                Browser.LoadUrlAsync(text);
+            }
+            catch
+            {
+                Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
+            }
         }
         public void ApplyUserAgent()
         {
@@ -223,29 +235,6 @@ namespace BhModule.WebPeeper
             var uiService = WebPeeperModule.Instance.UiService;
             if (uiService is null || uiService.BrowserWindow is null) return;
             uiService.BrowserWindow.Subtitle = title;
-        }
-        void OnFrameLoadStart()
-        {
-            WebPainter.Instance?.SetErrorState(false);
-        }
-        public void OnUrlLoadError(string failedUrl)
-        {
-            NavigationBar.Instance?.SetAddressInputText(failedUrl);
-            var text = string.IsNullOrWhiteSpace(LastAddressInputText) ? failedUrl : LastAddressInputText;
-            LastAddressInputText = "";
-            if (Uri.TryCreate(text, UriKind.Absolute, out Uri _)) // doesnt search if input url
-            {
-                WebPainter.Instance?.SetErrorState(true);
-            }
-            else
-            {
-                Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
-            }
-        }
-        void OnFullscreenModeChange(bool isFullscreen)
-        {
-            if (isFullscreen) NavigationBar.Instance?.Hide();
-            else NavigationBar.Instance?.Show();
         }
         string ChangePathTail(string path, string directoryName)
         {
@@ -303,55 +292,15 @@ namespace BhModule.WebPeeper
             }
             return tcs.Task;
         }
+        async public void CloseWebBrowser()
+        {
+            await WebPeeperModule.Instance.UiService.BrowserWindow.PrepareQuitBrowser();
+            Browser.Close();
+        }
         public async Task StartBrowsing()
         {
             SetupLib();
             await CreateWebBrowser();
-        }
-    }
-    internal class CefPkgVersion(string cefSharpversion, string cefVersion = "")
-    {
-        readonly public Version CefSharp = new(cefSharpversion);
-        readonly public Version Cef = new(string.IsNullOrEmpty(cefVersion) ? cefSharpversion : cefVersion);
-        public override string ToString()
-        {
-            return CefSharp.ToString();
-        }
-        public override bool Equals(object obj)
-        {
-            if (obj is CefPkgVersion cefVerObj)
-            {
-                return cefVerObj == this;
-            }
-            return false;
-        }
-        public override int GetHashCode()
-        {
-            return this.CefSharp.GetHashCode();
-        }
-        public static bool operator >(CefPkgVersion v1, CefPkgVersion v2)
-        {
-            return v1.CefSharp > v2.CefSharp;
-        }
-        public static bool operator <(CefPkgVersion v1, CefPkgVersion v2)
-        {
-            return v1.CefSharp < v2.CefSharp;
-        }
-        public static bool operator >=(CefPkgVersion v1, CefPkgVersion v2)
-        {
-            return v1.CefSharp > v2.CefSharp;
-        }
-        public static bool operator <=(CefPkgVersion v1, CefPkgVersion v2)
-        {
-            return v1.CefSharp < v2.CefSharp;
-        }
-        public static bool operator ==(CefPkgVersion v1, CefPkgVersion v2)
-        {
-            return v1.CefSharp == v2.CefSharp;
-        }
-        public static bool operator !=(CefPkgVersion v1, CefPkgVersion v2)
-        {
-            return v1.CefSharp != v2.CefSharp;
         }
     }
     enum AssemblyLoadType

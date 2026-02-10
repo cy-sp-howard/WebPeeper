@@ -13,13 +13,13 @@ namespace BhModule.WebPeeper
 {
     internal class WebPainter : Control
     {
-        public static WebPainter Instance;
+        public static WebPainter Instance { get; private set; }
         public Point LocationAtForm
         {
             get => Instance is null ? Point.Zero : new((int)(Instance.AbsoluteBounds.Location.X * GameService.Graphics.UIScaleMultiplier),
                     (int)(Instance.AbsoluteBounds.Location.Y * GameService.Graphics.UIScaleMultiplier));
         }
-        static Texture2D _webTexture;
+        static Texture2D _webTexture; // dispose when module unload
         byte[] _webTextureBufferBytes = [];
         Rectangle _webTextureRect = Rectangle.Empty;
         CefService CefService => WebPeeperModule.Instance.CefService;
@@ -39,6 +39,8 @@ namespace BhModule.WebPeeper
         {
             Instance = this;
             Browser.Paint += CefOnPaint;
+            Browser.FrameLoadStart += OnFrameLoadStart;
+            Browser.UrlLoadError += OnUrlLoadError;
             GameService.Input.Keyboard.KeyStateChanged += KeyboardHandler;
             ApplyBgTexture();
             if (_webTexture is null) CefService.GetScreenshot().ContinueWith(t =>
@@ -58,7 +60,7 @@ namespace BhModule.WebPeeper
         }
         protected override void OnMouseLeft(MouseEventArgs e)
         {
-            if(_isLeftMouseButtonPressed)
+            if (_isLeftMouseButtonPressed)
             {
                 MouseHandler(MouseEventType.LeftMouseButtonReleased, GameService.Input.Mouse.State);
             }
@@ -91,6 +93,14 @@ namespace BhModule.WebPeeper
                 spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, _webTextureRect, _webBackgroundColor);
                 spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect);
             }
+        }
+        void OnFrameLoadStart()
+        {
+            SetErrorState(false);
+        }
+        public void OnUrlLoadError(string url)
+        {
+            SetErrorState(true);
         }
         bool CefOnPaint(IntPtr bufferHandle, int width, int height)
         {
@@ -174,6 +184,8 @@ namespace BhModule.WebPeeper
         {
             GameService.Input.Keyboard.KeyStateChanged -= KeyboardHandler;
             Browser.Paint -= CefOnPaint;
+            Browser.FrameLoadStart -= OnFrameLoadStart;
+            Browser.UrlLoadError -= OnUrlLoadError;
             _cefPaintProcess?.Dispose();
         }
         static public void DisposeWebTexture() { _webTexture?.Dispose(); _webTexture = null; }
