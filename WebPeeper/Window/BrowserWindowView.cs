@@ -135,6 +135,13 @@ namespace BhModule.WebPeeper
                 Height = Height,
                 Parent = this
             };
+            _addressInput.InputFocusChanged += (s, e) =>
+            {
+                if (!e.Value) return;
+                // WindowsClipboardService cant read cef copied
+                var text = System.Windows.Forms.Clipboard.GetText();
+                ClipboardUtil.WindowsClipboardService.SetTextAsync(text); 
+            };
             _addressInput.EnterPressed += delegate
             {
                 if (string.IsNullOrWhiteSpace(_addressInput.Text))
