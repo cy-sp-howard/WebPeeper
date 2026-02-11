@@ -257,7 +257,7 @@ namespace BhModule.WebPeeper
             if (_himc != IntPtr.Zero) Disable(false);
             if (WebPeeperModule.Instance.Settings.IsBlockKeybinds.Value) DisableAllKeybinds();
             Utils.SetForegroundWindow(winHandle);
-            if (!WebPeeperModule.BlishHudInstance.Form.Focused)
+            if (!WebPeeperModule.BlishHudInstance.Window.IsForeground())
             {
                 GameService.GameIntegration.Gw2Instance.FocusGw2();
                 Utils.SetForegroundWindow(winHandle);
@@ -275,7 +275,7 @@ namespace BhModule.WebPeeper
             Utils.ImmSetOpenStatus(_himc, false);
             Utils.ImmReleaseContext(winHandle, _himc);
             _himc = IntPtr.Zero;
-            if (tryFocusGame && WebPeeperModule.BlishHudInstance.Form.Focused)
+            if (tryFocusGame && WebPeeperModule.BlishHudInstance.Window.IsForeground())
             {
                 GameService.GameIntegration.Gw2Instance.FocusGw2();
             }

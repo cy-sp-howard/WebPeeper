@@ -149,6 +149,7 @@ namespace BhModule.WebPeeper
             var mouseEvtFlag = GetCurrentKeyboardModifiers();
             if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
             else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
+
             if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
             {
                 _isLeftMouseButtonPressed = true;
@@ -165,11 +166,24 @@ namespace BhModule.WebPeeper
             {
                 _isRightMouseButtonPressed = false;
             }
+
+            // handle pressed event when bh focused, ms state is correct when bh focused, mouseEventType is correct when bh unfocused and press event lead to bh unfocus
+            if (ms.LeftButton == ButtonState.Pressed && !_isLeftMouseButtonPressed)
+            {
+                MouseHandler(MouseEventType.LeftMouseButtonPressed, ms);
+                mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
+            }
+            else if (ms.RightButton == ButtonState.Pressed && !_isRightMouseButtonPressed)
+            {
+                MouseHandler(MouseEventType.RightMouseButtonPressed, ms);
+                mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
+            }
+
             Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {
-            if (!_mouseOver || WebPeeperModule.BlishHudInstance.Form.Focused) return;
+            if (!_mouseOver || WebPeeperModule.BlishHudInstance.Window.IsForeground()) return;
             var isKeyDown = e.EventType == KeyboardEventType.KeyDown;
             var key = e.Key switch
             {

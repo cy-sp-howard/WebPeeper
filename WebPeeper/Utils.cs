@@ -49,6 +49,10 @@ namespace BhModule.WebPeeper
         public static extern bool SetDllDirectory(string lpPathName);
         [DllImport("kernel32.dll")]
         public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int nSize, out IntPtr lpNumberOfBytesRead);
+        public static bool IsForeground(this GameWindow window)
+        {
+            return GetForegroundWindow() == window.Handle;
+        }
         public static void SafeInvoke(this System.Windows.Forms.Form form, Action cb)
         {
             if (form.IsDisposed || !form.IsHandleCreated) return;
