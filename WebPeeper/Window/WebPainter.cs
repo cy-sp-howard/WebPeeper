@@ -24,8 +24,10 @@ namespace BhModule.WebPeeper
         Rectangle _webTextureRect = Rectangle.Empty;
         CefService CefService => WebPeeperModule.Instance.CefService;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
-        bool _isLeftMouseButtonPressed = false;
-        bool _isRightMouseButtonPressed = false;
+        bool _isTriggerMouseLeftButtonPressed = false;
+        bool _isTriggerMouseRightButtonPressed = false;
+        bool _isMouseStateLeftButtonPressed = false;
+        bool _isMouseStateRightButtonPressed = false;
         static bool _isError = false;
         static readonly Texture2D _errorTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("error.png");
         static readonly Texture2D _quesTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("what.png");
@@ -55,16 +57,17 @@ namespace BhModule.WebPeeper
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
+            // only work when bh window not focused
             if (!Disabled) { MouseHandler(mouseEventType, ms); }
             return base.TriggerMouseInput(mouseEventType, ms);
         }
         protected override void OnMouseLeft(MouseEventArgs e)
         {
-            if (_isLeftMouseButtonPressed)
+            if (_isTriggerMouseLeftButtonPressed)
             {
                 MouseHandler(MouseEventType.LeftMouseButtonReleased, GameService.Input.Mouse.State);
             }
-            if (_isRightMouseButtonPressed)
+            if (_isTriggerMouseRightButtonPressed)
             {
                 MouseHandler(MouseEventType.RightMouseButtonReleased, GameService.Input.Mouse.State);
             }
@@ -92,6 +95,29 @@ namespace BhModule.WebPeeper
             {
                 spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, _webTextureRect, _webBackgroundColor);
                 spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect);
+            }
+        }
+        public override void DoUpdate(GameTime gameTime)
+        {
+            if (!_mouseOver) return;
+            var ms = GameService.Input.Mouse.State; // handle mouse button event when bh window focused
+            var isLeftPressed = ms.LeftButton == ButtonState.Pressed;
+            if (isLeftPressed != _isMouseStateLeftButtonPressed)
+            {
+                _isMouseStateLeftButtonPressed = isLeftPressed;
+                if (isLeftPressed != _isTriggerMouseLeftButtonPressed) // _isTriggerMouseLeftButtonPressed trigger early
+                {
+                    MouseHandler(isLeftPressed ? MouseEventType.LeftMouseButtonPressed : MouseEventType.LeftMouseButtonReleased, ms);
+                }
+            }
+            var isRightPressed = ms.RightButton == ButtonState.Pressed;
+            if (isRightPressed != _isMouseStateRightButtonPressed)
+            {
+                _isMouseStateRightButtonPressed = isRightPressed;
+                if (isRightPressed != _isTriggerMouseRightButtonPressed)
+                {
+                    MouseHandler(isRightPressed ? MouseEventType.RightMouseButtonPressed : MouseEventType.RightMouseButtonReleased, ms);
+                }
             }
         }
         void OnFrameLoadStart()
@@ -147,38 +173,27 @@ namespace BhModule.WebPeeper
         {
             var ctrlPos = ms.Position - AbsoluteBounds.Location;
             var mouseEvtFlag = GetCurrentKeyboardModifiers();
-            if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
-            else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
+            if (_isTriggerMouseLeftButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
+            else if (_isTriggerMouseRightButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
 
             if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
             {
-                _isLeftMouseButtonPressed = true;
+                _isTriggerMouseLeftButtonPressed = true;
             }
             else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
             {
-                _isRightMouseButtonPressed = true;
+                _isTriggerMouseRightButtonPressed = true;
             }
             else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
             {
-                _isLeftMouseButtonPressed = false;
+                _isTriggerMouseLeftButtonPressed = false;
             }
             else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
             {
-                _isRightMouseButtonPressed = false;
+                _isTriggerMouseRightButtonPressed = false;
             }
 
-            // handle pressed event when bh focused, ms state is correct when bh focused, mouseEventType is correct when bh unfocused and press event lead to bh unfocus
-            if (ms.LeftButton == ButtonState.Pressed && !_isLeftMouseButtonPressed)
-            {
-                MouseHandler(MouseEventType.LeftMouseButtonPressed, ms);
-                mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
-            }
-            else if (ms.RightButton == ButtonState.Pressed && !_isRightMouseButtonPressed)
-            {
-                MouseHandler(MouseEventType.RightMouseButtonPressed, ms);
-                mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
-            }
-
+            if (mouseEventType != MouseEventType.MouseMoved) Trace.WriteLine($"-------Send: {mouseEventType}");
             Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
