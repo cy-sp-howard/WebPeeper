@@ -1,6 +1,7 @@
 ﻿using BhModule.WebPeeper.Window;
 using Blish_HUD;
 using Blish_HUD.Controls;
+using Blish_HUD.Graphics;
 using Blish_HUD.Graphics.UI;
 using Blish_HUD.Input;
 using Blish_HUD.Settings;
@@ -124,7 +125,12 @@ namespace BhModule.WebPeeper
             };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
             IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User-Data", () => "Clear cache and user-data while WebPeeper module initialize.");
-            IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if checked.  Restart required.");
+            IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if checked.");
+            IsFollowBhFps.SettingChanged += (s, e) =>
+            {
+                if (!CefService.LibLoadStarted) return;
+                WebPeeperModule.Instance.CefService.ApplyFrameRate();
+            };
             IsBlockKeybinds = settings.DefineSetting(nameof(IsBlockKeybinds), true, () => "Block All Blish-HUD Keybinds while the Web is Accepting Input", () => "Uncheck if keybinds fail after typing.");
             IsShowWarning = settings.DefineSetting(nameof(IsShowWarning), true, () => "Show Outdated Warning", () => "");
         }
@@ -156,6 +162,20 @@ namespace BhModule.WebPeeper
                 return;
             }
             _ = WebPeeperModule.Instance.DownloadService.Download(CefService.Versions[CefVersion.Value]);
+        }
+        public int GetFrameRate()
+        {
+            var frameRate = 30;
+            if (IsFollowBhFps.Value)
+            {
+                frameRate = GameService.Graphics.FrameLimiter switch
+                {
+                    FramerateMethod.LockedTo30Fps => 30,
+                    FramerateMethod.LockedTo60Fps => 60,
+                    _ => 60,
+                };
+            }
+            return frameRate;
         }
         public void RedownloadCef()
         {

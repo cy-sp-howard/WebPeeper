@@ -1,5 +1,4 @@
 ﻿using Blish_HUD;
-using Blish_HUD.Graphics;
 using CefHelper;
 using Microsoft.Xna.Framework.Graphics;
 using System;
@@ -210,6 +209,10 @@ namespace BhModule.WebPeeper
                 Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
             }
         }
+        public void ApplyFrameRate()
+        {
+            Browser.SetFrameRate(WebPeeperModule.Instance.Settings.GetFrameRate());
+        }
         public void ApplyUserAgent()
         {
             Browser.SetMobileUserAgent(WebPeeperModule.Instance.Settings.IsMobileLayout.Value);
@@ -262,17 +265,7 @@ namespace BhModule.WebPeeper
                     _cefSharpFolder,
                     settings.IsCleanMode.Value
                     );
-                var frameRate = 30;
-                if (settings.IsFollowBhFps.Value)
-                {
-                    frameRate = GameService.Graphics.FrameLimiter switch
-                    {
-                        FramerateMethod.LockedTo30Fps => 30,
-                        FramerateMethod.LockedTo60Fps => 60,
-                        _ => 60,
-                    };
-                }
-                Browser.Create(settings.HomeUrl.Value, frameRate, settings.IsMobileLayout.Value)
+                Browser.Create(settings.HomeUrl.Value, settings.GetFrameRate(), settings.IsMobileLayout.Value)
                     .ContinueWith(t =>
                     {
                         if (t.Status == TaskStatus.RanToCompletion) tcs.TrySetResult(true);

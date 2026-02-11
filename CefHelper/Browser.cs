@@ -75,13 +75,12 @@ namespace CefHelper
             {
                 if (_webBrowser is null || _webBrowser.IsDisposed)
                 {
-                    var browserSetting = new BrowserSettings(true)
+                    _webBrowser = new ChromiumWebBrowser(defaultUrl);
+                    _webBrowser.BrowserInitialized += delegate
                     {
-                        WindowlessFrameRate = frameRate
+                        SetFrameRate(frameRate);
+                        tcs.TrySetResult(true);
                     };
-
-                    _webBrowser = new ChromiumWebBrowser(defaultUrl, browserSetting);
-                    _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); };
                     _webBrowser.LoadingStateChanged += (s, e) =>
                     {
                         LoadingStateChanged?.Invoke(e.CanGoBack, e.CanGoForward, e.IsLoading);
@@ -369,10 +368,17 @@ namespace CefHelper
             }
             return modifiers;
         }
-        static public Task SetBrowserSize(int w, int h)
+        static public void SetSize(int w, int h)
         {
-            if (_webBrowser is null) return Task.FromResult(false);
-            return _webBrowser.ResizeAsync(w, h);
+            if (_webBrowser is null) return;
+            _webBrowser.ResizeAsync(w, h);
+        }
+        static public void SetFrameRate(int val)
+        {
+            if (_webBrowser is null) return;
+            var host = _webBrowser.GetBrowserHost();
+            if (host is null) return;
+            host.WindowlessFrameRate = val;
         }
         static public void Zoom(float rate)
         {

@@ -76,7 +76,7 @@ namespace BhModule.WebPeeper
         protected override void OnResized(ResizedEventArgs e)
         {
             _webTextureRect.Size = Size;
-            Browser.SetBrowserSize(Width, Height);
+            Browser.SetSize(Width, Height);
             SetErrorTextureRect();
             base.OnResized(e);
         }
