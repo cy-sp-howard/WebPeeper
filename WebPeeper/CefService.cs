@@ -76,7 +76,7 @@ namespace BhModule.WebPeeper
             }
             catch { }
         }
-        void SetupCefDllPath()
+        void SetupCefDll()
         {
             void setLibCefDllFolder(object s, EventArgs e)
             {
@@ -135,7 +135,7 @@ namespace BhModule.WebPeeper
                 catch { }
             }
         }
-        void SetupCefSharpDllFolder()
+        void SetupCefSharpDll()
         {
             _pendingResolveDlls.Add("CefHelper", AssemblyLoadType.Bytes);
             if (IsDefaultVersion)
@@ -249,8 +249,8 @@ namespace BhModule.WebPeeper
             LibLoadStarted = true;
             CefVersionSettingView.UpdateView?.Invoke();
             LibLoadStart?.Invoke(this, EventArgs.Empty);
-            SetupCefDllPath();
-            SetupCefSharpDllFolder();
+            SetupCefDll();
+            SetupCefSharpDll();
             SetupEventHandlers();
         }
         Task CreateWebBrowser()
@@ -290,10 +290,13 @@ namespace BhModule.WebPeeper
             await WebPeeperModule.Instance.UiService.BrowserWindow.PrepareQuitBrowser();
             Browser.Close();
         }
-        public async Task StartBrowsing()
+        public Task StartBrowsing()
         {
-            SetupLib();
-            await CreateWebBrowser();
+            return Task.Run(async () =>
+             {
+                 SetupLib();
+                 await CreateWebBrowser();
+             });
         }
     }
     enum AssemblyLoadType

@@ -73,6 +73,12 @@ namespace BhModule.WebPeeper
         }
         void ShowBrowser()
         {
+            _windowContent?.Dispose();
+            _windowContent = new WaitingCefSetup()
+            {
+                Parent = _window,
+                Size = _window.ContentRegion.Size,
+            };
             WebPeeperModule.Instance.CefService.StartBrowsing().ContinueWith(t =>
             {
                 // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
@@ -140,7 +146,7 @@ namespace BhModule.WebPeeper
                 if (!e.Value) return;
                 // WindowsClipboardService cant read cef copied
                 var text = System.Windows.Forms.Clipboard.GetText();
-                ClipboardUtil.WindowsClipboardService.SetTextAsync(text); 
+                ClipboardUtil.WindowsClipboardService.SetTextAsync(text);
             };
             _addressInput.EnterPressed += delegate
             {
@@ -303,6 +309,13 @@ namespace BhModule.WebPeeper
         void OnNavigationBarVisibleChanged(object sender, EventArgs e)
         {
             ResetMainContentRect();
+        }
+    }
+    internal class WaitingCefSetup : Control
+    {
+        protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
+        {
+            LoadingSpinnerUtil.DrawLoadingSpinner(this, spriteBatch, new Rectangle(Size.X / 2 - 50, Size.Y / 2 - 50, 100, 100));
         }
     }
 }
