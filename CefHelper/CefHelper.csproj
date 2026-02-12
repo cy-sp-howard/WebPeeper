@@ -15,7 +15,7 @@
     <LangVersion>12</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
     <!-- https://learn.microsoft.com/en-us/visualstudio/msbuild/msbuild-conditions?view=visualstudio#comparing-versions -->
-	  <DefineConstants Condition="'$(CefVersion)' != '' And $(CefVersion) > '114.2.120'">GREATER_THAN_114</DefineConstants>
+    <DefineConstants Condition="'$(CefVersion)' != '' And $(CefVersion) &gt; '114.2.120'">GREATER_THAN_114</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
     <DebugSymbols>true</DebugSymbols>
@@ -37,6 +37,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -74,6 +75,6 @@
   </Choose>
   <Target Name="AnotherCefVersions" AfterTargets="Build">
     <Copy Condition="'$(CefVersion)' != ''" SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(CopyDir)$(CefVersion)\" />
-	</Target>
+  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

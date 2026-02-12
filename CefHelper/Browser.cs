@@ -368,10 +368,16 @@ namespace CefHelper
             }
             return modifiers;
         }
+        static public void Repaint()
+        {
+            if (_webBrowser is null) return;
+            _webBrowser.GetBrowserHost()?.Invalidate(PaintElementType.View);
+        }
         static public void SetSize(int w, int h)
         {
             if (_webBrowser is null) return;
-            _webBrowser.ResizeAsync(w, h);
+            _webBrowser.Size = new(w, h);
+            Repaint();
         }
         static public void SetFrameRate(int val)
         {

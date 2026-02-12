@@ -45,15 +45,7 @@ namespace BhModule.WebPeeper
             Browser.UrlLoadError += OnUrlLoadError;
             GameService.Input.Keyboard.KeyStateChanged += KeyboardHandler;
             ApplyBgTexture();
-            if (_webTexture is null) CefService.GetScreenshot().ContinueWith(t =>
-            {
-                if (_webTexture is not null)
-                {
-                    t.Result?.Dispose();
-                    return;
-                }
-                _webTexture = t.Result;
-            });
+            Browser.Repaint();
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
@@ -193,7 +185,6 @@ namespace BhModule.WebPeeper
                 _isTriggerMouseRightButtonPressed = false;
             }
 
-            if (mouseEventType != MouseEventType.MouseMoved) Trace.WriteLine($"-------Send: {mouseEventType}");
             Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
         }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
