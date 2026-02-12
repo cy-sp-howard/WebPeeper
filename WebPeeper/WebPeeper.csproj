@@ -147,7 +147,7 @@
     </ItemGroup>
     <MSBuild Projects="..\CefHelper\CefHelper.csproj" Properties="CefVersion=%(CefVersions.Identity);CopyDir=$([System.IO.Path]::GetFullPath($(OutDir)))helpers\" Targets="Restore;Build" />
   </Target>
-  <Target Name="BuildWebPeeperModule" AfterTargets="Build">
+  <Target Name="BuildBlishHUDModule" AfterTargets="Build">
     <Delete Files="$(WebPeeperBhmPath)" />
     <ItemGroup>
       <RefFiles Include="$(OutDir)ref\**" />
@@ -160,7 +160,7 @@
     <Copy SourceFiles="$(OutDir)de\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)de\" />
     <Copy SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(TempPath)" />
     <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
-    <Copy SourceFiles="$(OutDir)manifest.json" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(ProjectDir)manifest.json" DestinationFolder="$(TempPath)" />
     <Copy SourceFiles="$(OutDir)CefSharp.OffScreen.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
     <Copy SourceFiles="$(OutDir)CefSharp.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
     <Copy SourceFiles="$(OutDir)CefSharp.Core.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
