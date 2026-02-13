@@ -20,6 +20,7 @@ namespace BhModule.WebPeeper
         internal ContentsManager ContentsManager => ModuleParameters.ContentsManager;
         internal DirectoriesManager DirectoriesManager => ModuleParameters.DirectoriesManager;
         internal Gw2ApiManager Gw2ApiManager => ModuleParameters.Gw2ApiManager;
+        internal string DataFolder => DirectoriesManager.GetFullDirectoryPath(Name.ToLower());
         #endregion
         internal CefService CefService { get; private set; }
         internal ImeService ImeService { get; private set; }

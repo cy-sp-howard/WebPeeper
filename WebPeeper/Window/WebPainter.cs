@@ -122,7 +122,7 @@ namespace BhModule.WebPeeper
         }
         bool CefOnPaint(IntPtr bufferHandle, int width, int height)
         {
-            if (!WebPeeperModule.Instance.UiService.BrowserWindow.Visible) return true;
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true) return true;
             var bufferSize = width * height * sizeof(int);
             if (bufferSize != _webTextureBufferBytes.Length)
             {

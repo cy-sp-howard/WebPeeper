@@ -26,7 +26,7 @@ namespace BhModule.WebPeeper
         {
             winHandle = handle;
             AssignHandle(winHandle);
-            WebPeeperModule.Instance.CefService.LibLoadStart += delegate
+            CefService.LibLoadStart += delegate
             {
                 WebPeeperModule.BlishHudInstance.Form.LostFocus += OnHudLostFocus;
             };

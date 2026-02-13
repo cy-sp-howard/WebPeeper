@@ -124,7 +124,7 @@ namespace BhModule.WebPeeper
                 WebPeeperModule.Instance.CefService.ApplyUserAgent();
             };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
-            IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User-Data", () => "Clear cache and user-data while WebPeeper module initialize.");
+            IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User Data", () => $"Deletes all data of the previous session each time {WebPeeperModule.Instance.Name} opens.");
             IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if checked.");
             IsFollowBhFps.SettingChanged += (s, e) =>
             {

@@ -18,7 +18,7 @@ namespace BhModule.WebPeeper
         {
             _window = window;
             _window.ContentResized += OnWindowResize;
-            if (WebPeeperModule.Instance.CefService.Outdated)
+            if (CefService.Outdated)
             {
                 ShowOutdatedWarning();
             }

@@ -33,7 +33,7 @@ namespace CefHelper
         static public event Action<string> AddressChanged;
         static public event Func<IntPtr, int, int, bool> Paint;
         static ChromiumWebBrowser _webBrowser;
-        static public void CefSettingInit(string localesPath, string settingPath, string subprocessPath, bool clearUserData)
+        static public void CefSettingInit(string localesPath, string cachePath, string subprocessPath)
         {
             if (Cef.IsInitialized == true) return;
             CefSharpSettings.FocusedNodeChangedEnabled = true;
@@ -41,16 +41,12 @@ namespace CefHelper
             settings.EnableAudio();
             if (!string.IsNullOrEmpty(localesPath)) settings.LocalesDirPath = localesPath;
             settings.BrowserSubprocessPath = Path.Combine(subprocessPath, "CefSharp.BrowserSubprocess.exe");
-            settings.CachePath = Path.Combine(settingPath, "CefCache");
+            settings.CachePath = cachePath;
 #if !GREATER_THAN_114
             // deleted after 114, https://github.com/cefsharp/CefSharp/issues/4518
             settings.UserDataPath = settings.CachePath;
 #endif
             settings.CefCommandLineArgs.Add("gpu-preferences"); // not sure what is it, but gw2 cefhost.exe uses it
-            if (clearUserData)
-            {
-                Directory.Delete(settings.CachePath, true);
-            }
             settings.PersistSessionCookies = true;
             settings.RegisterScheme(new CefCustomScheme()
             {

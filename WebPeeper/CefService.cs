@@ -17,48 +17,51 @@ namespace BhModule.WebPeeper
 {
     internal class CefService
     {
-        static readonly public string CefSettingFolder = DirectoryUtil.RegisterDirectory(WebPeeperModule.InstanceModuleManager.Manifest.Name.Replace(" ", "").ToLower());
-        static readonly string _cefSharpVersionsFolder = DirectoryUtil.RegisterDirectory(CefSettingFolder, "CefVersions");
-        string _cefFolder = Path.Combine(_cefSharpVersionsFolder, $"{CurrentVersion}");
-        string _cefSharpFolder = Path.Combine(_cefSharpVersionsFolder, $"{CurrentVersion}");
-        string _cefSharpBhmPath = Path.Combine("cef", $"{CurrentVersion}");
-        readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
-        public event EventHandler LibLoadStart;
-        static public bool LibLoadStarted { get; private set; } = false;
+        static WebPeeperModule Module => WebPeeperModule.Instance;
+        static ModuleSettings Settings => Module.Settings;
         static readonly Dictionary<CefAvailableVersion, CefPkgVersion> _versions = new() {
             { CefAvailableVersion.v103, new("103.0.90","103.0.9") },
             { CefAvailableVersion.v143, new("143.0.90","143.0.9") },
             { CefAvailableVersion.v144, new("144.0.120","144.0.12") },
         };
+        static public CefPkgVersion CurrentVersion { get; private set; } = _versions[Settings.CefVersion.Value];
+        static string CefSharpVersionsFolder => DirectoryUtil.RegisterDirectory(Module.DataFolder, "CefVersions");
+        static string CefCacheFolder => DirectoryUtil.RegisterDirectory(Module.DataFolder, "CefCache");
+        static string _cefFolder = Path.Combine(CefSharpVersionsFolder, $"{CurrentVersion}");
+        static string _cefSharpFolder = Path.Combine(CefSharpVersionsFolder, $"{CurrentVersion}");
+        static string _cefSharpBhmPath = Path.Combine("cef", $"{CurrentVersion}");
+        static readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
+        static public event EventHandler LibLoadStart;
+        static public bool LibLoadStarted { get; private set; } = false;
+        bool _eventHandlersBound = false;
         static public IReadOnlyDictionary<CefAvailableVersion, CefPkgVersion> Versions => _versions;
-        static readonly CefPkgVersion _suggestionVersion = Versions[CefAvailableVersion.v144];
-        static public readonly CefPkgVersion DefaultVersion = Versions[CefAvailableVersion.v103];
-        static public CefPkgVersion CurrentVersion { get; private set; } = Versions[WebPeeperModule.Instance.Settings.CefVersion.Value];
+        static readonly CefPkgVersion _suggestionVersion = _versions[CefAvailableVersion.v144];
+        static public readonly CefPkgVersion DefaultVersion = _versions[CefAvailableVersion.v103];
 
         static bool IsDefaultVersion => CurrentVersion == DefaultVersion;
-        public bool Outdated => CurrentVersion < _suggestionVersion;
+        static public bool Outdated => CurrentVersion < _suggestionVersion;
         public void Load()
         {
             CleanOldData();
             ExtractFiles();
-            _ = WebPeeperModule.Instance.DownloadService.Download(CurrentVersion);
+            _ = Module.DownloadService.Download(CurrentVersion);
         }
         public void Unload()
         {
             LibLoadStart = null;
             WebPeeperModule.BlishHudInstance.Exiting -= OnBlishHudExiting;
             AppDomain.CurrentDomain.AssemblyResolve -= CefSharpLibResolver;
-            if (LibLoadStarted) OnBlishHudExiting(this, EventArgs.Empty);
+            if (LibLoadStarted) OnBlishHudExiting(this, EventArgs.Empty); // prevent load cefHelper so use OnBlishHudExiting 
         }
         public void ApplySettingVersion()
         {
-            var newVersion = Versions[WebPeeperModule.Instance.Settings.CefVersion.Value];
+            var newVersion = _versions[Settings.CefVersion.Value];
             if (LibLoadStarted) return;
             CurrentVersion = newVersion;
         }
         public string GetCefSharpFolder(CefPkgVersion version)
         {
-            return Path.Combine(_cefSharpVersionsFolder, version.ToString());
+            return Path.Combine(CefSharpVersionsFolder, version.ToString());
         }
         void CleanOldData()
         {
@@ -70,9 +73,23 @@ namespace BhModule.WebPeeper
             catch { }
             try
             {
-                var errVersion = Versions[WebPeeperModule.Instance.Settings.CefErrorVersion.Value];
-                WebPeeperModule.Instance.Settings.CefErrorVersion.Value = CefAvailableVersion.v103;
-                WebPeeperModule.Instance.DownloadService.Delete(errVersion);
+                var path = Path.Combine(Module.DataFolder, "CefUserData");
+                if (Directory.Exists(path)) Directory.Delete(path, true);
+            }
+            catch { }
+            try
+            {
+                var errVersion = _versions[Settings.CefErrorVersion.Value];
+                Settings.CefErrorVersion.Value = CefAvailableVersion.v103;
+                Module.DownloadService.Delete(errVersion);
+            }
+            catch { }
+        }
+        void ClearCefCache()
+        {
+            try
+            {
+                Directory.Delete(CefCacheFolder, true);
             }
             catch { }
         }
@@ -103,8 +120,10 @@ namespace BhModule.WebPeeper
             if (GameService.GameIntegration.Gw2Instance.Gw2IsRunning) setLibCefDllFolder(this, EventArgs.Empty);
             else GameService.GameIntegration.Gw2Instance.Gw2Started += setLibCefDllFolder;
         }
-        void SetupEventHandlers()
+        void BindEventHandlers()
         {
+            if (_eventHandlersBound) return;
+            _eventHandlersBound = true;
             SetContextCreatedScript();
             WebPeeperModule.BlishHudInstance.Exiting += OnBlishHudExiting;
             Browser.BlishHudSchemeRequested += OnBlishHudSchemeRequested;
@@ -113,7 +132,7 @@ namespace BhModule.WebPeeper
         }
         void SetContextCreatedScript()
         {
-            using var fileStream = WebPeeperModule.Instance.ContentsManager.GetFileStream("onContextCreated.js") as MemoryStream;
+            using var fileStream = Module.ContentsManager.GetFileStream("onContextCreated.js") as MemoryStream;
             using TextReader reader = new StreamReader(fileStream, Encoding.UTF8);
             Browser.ContextCreatedScript = reader.ReadToEnd();
         }
@@ -206,16 +225,16 @@ namespace BhModule.WebPeeper
             }
             catch
             {
-                Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
+                Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
             }
         }
         public void ApplyFrameRate()
         {
-            Browser.SetFrameRate(WebPeeperModule.Instance.Settings.GetFrameRate());
+            Browser.SetFrameRate(Settings.GetFrameRate());
         }
         public void ApplyUserAgent()
         {
-            Browser.SetMobileUserAgent(WebPeeperModule.Instance.Settings.IsMobileLayout.Value);
+            Browser.SetMobileUserAgent(Settings.IsMobileLayout.Value);
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
@@ -223,19 +242,19 @@ namespace BhModule.WebPeeper
         }
         Stream OnBlishHudSchemeRequested(string filePath)
         {
-            return WebPeeperModule.Instance.ContentsManager.GetFileStream(filePath); // cef auto dispose stream
+            return Module.ContentsManager.GetFileStream(filePath); // cef auto dispose stream
         }
         void OnFocusedChanged(bool focused)
         {
             WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
             {
-                if (focused) WebPeeperModule.Instance.ImeService.Enable();
-                else WebPeeperModule.Instance.ImeService.Disable();
+                if (focused) Module.ImeService.Enable();
+                else Module.ImeService.Disable();
             });
         }
         void OnTitleChanged(string title)
         {
-            var uiService = WebPeeperModule.Instance.UiService;
+            var uiService = Module.UiService;
             if (uiService is null || uiService.BrowserWindow is null) return;
             uiService.BrowserWindow.Subtitle = title;
         }
@@ -249,23 +268,22 @@ namespace BhModule.WebPeeper
             LibLoadStarted = true;
             CefVersionSettingView.UpdateView?.Invoke();
             LibLoadStart?.Invoke(this, EventArgs.Empty);
+
+            if (Settings.IsCleanMode.Value) ClearCefCache();
             SetupCefDll();
             SetupCefSharpDll();
-            SetupEventHandlers();
         }
         Task CreateWebBrowser()
         {
             var tcs = new TaskCompletionSource<bool>();
             try
             {
-                var settings = WebPeeperModule.Instance.Settings;
                 Browser.CefSettingInit(
                     IsDefaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
-                    CefSettingFolder,
-                    _cefSharpFolder,
-                    settings.IsCleanMode.Value
+                    CefCacheFolder,
+                    _cefSharpFolder
                     );
-                Browser.Create(settings.HomeUrl.Value, settings.GetFrameRate(), settings.IsMobileLayout.Value)
+                Browser.Create(Settings.HomeUrl.Value, Settings.GetFrameRate(), Settings.IsMobileLayout.Value)
                     .ContinueWith(t =>
                     {
                         if (t.Status == TaskStatus.RanToCompletion) tcs.TrySetResult(true);
@@ -280,14 +298,15 @@ namespace BhModule.WebPeeper
             catch (Exception ex)
             {
                 WebPeeperModule.Logger.Error(ex.Message);
-                WebPeeperModule.Instance.Settings.RedownloadCef();
+                Settings.RedownloadCef();
                 tcs.TrySetException(ex);
             }
             return tcs.Task;
         }
         async public void CloseWebBrowser()
         {
-            await WebPeeperModule.Instance.UiService.BrowserWindow.PrepareQuitBrowser();
+            var window = Module.UiService?.BrowserWindow;
+            if (window is not null) await window.PrepareQuitBrowser();
             Browser.Close();
         }
         public Task StartBrowsing()
@@ -295,6 +314,7 @@ namespace BhModule.WebPeeper
             return Task.Run(async () =>
              {
                  SetupLib();
+                 BindEventHandlers();
                  await CreateWebBrowser();
              });
         }

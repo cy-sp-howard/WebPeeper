@@ -83,7 +83,7 @@ namespace BhModule.WebPeeper
                 else _menuContainer.Opacity = 1f;
             });
 
-            _jsonPath = Path.Combine(CefService.CefSettingFolder, _bookmarksJsonFileName);
+            _jsonPath = Path.Combine(WebPeeperModule.Instance.DataFolder, _bookmarksJsonFileName);
             if (!File.Exists(_jsonPath)) return;
             try
             {
