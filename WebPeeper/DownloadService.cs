@@ -58,11 +58,13 @@ namespace BhModule.WebPeeper
         }
         public async Task Download(CefPkgVersion cefPkgVersion)
         {
+            WebPeeperModule.Logger.Debug($"DownloadService.Download: try download if didnt download.");
             try
             {
                 var downloaded = CheckCefLib(cefPkgVersion);
                 var downloading = _downloadingVersions.Contains(cefPkgVersion);
                 if (downloaded || downloading) return;
+                WebPeeperModule.Logger.Debug($"DownloadService.Download: downloading cef {cefPkgVersion}.");
                 if (_downloadingCount == 0) _progress.Report(0);
                 using var client = new HttpClient();
                 // https://learn.microsoft.com/en-us/nuget/api/overview#service-index
@@ -125,6 +127,8 @@ namespace BhModule.WebPeeper
                     _downloadingCount = 0;
                     _downloadingVersions.Clear();
                     _progress.Report(1);
+
+                    WebPeeperModule.Logger.Debug($"DownloadService.Download: all end.");
                 }
             }
             catch (Exception ex)

@@ -1,4 +1,5 @@
-﻿using Blish_HUD.Input;
+﻿using Blish_HUD;
+using Blish_HUD.Input;
 using CefSharp;
 using CefSharp.Enums;
 using CefSharp.Internals;
@@ -14,7 +15,6 @@ namespace CefHelper
 {
     static public class Browser
     {
-
         const string SchemeName = "blish-hud";
         const string DomainName = "web-peeper";
         const int ExecuteScriptTimeout = 1000;
@@ -33,6 +33,7 @@ namespace CefHelper
         static public event Action<string> AddressChanged;
         static public event Func<IntPtr, int, int, bool> Paint;
         static ChromiumWebBrowser _webBrowser;
+        static internal readonly Logger Logger = Logger.GetLogger(typeof(Browser));
         static public void CefSettingInit(string localesPath, string cachePath, string subprocessPath)
         {
             if (Cef.IsInitialized == true) return;
@@ -63,14 +64,17 @@ namespace CefHelper
                 },
             });
             Cef.Initialize(settings);
+            Logger.Debug("CefSettingInit");
         }
         static public Task<bool> Create(string defaultUrl, int frameRate, bool isMobile)
         {
+            Logger.Debug("Create: return if browser initialized.");
             var tcs = new TaskCompletionSource<bool>();
             try
             {
                 if (_webBrowser is null || _webBrowser.IsDisposed)
                 {
+                    Logger.Debug("Create: create browser");
                     _webBrowser = new ChromiumWebBrowser(defaultUrl);
                     _webBrowser.BrowserInitialized += delegate
                     {
@@ -127,6 +131,7 @@ namespace CefHelper
         {
             _webBrowser?.Dispose();
             _webBrowser = null;
+            Logger.Debug("Close: close browser");
         }
         static public void Back()
         {
@@ -143,15 +148,18 @@ namespace CefHelper
         static public void WasHidden(bool hidden)
         {
             _webBrowser?.GetBrowserHost()?.WasHidden(hidden);
+            Logger.Debug($"WasHidden: hidden = {hidden}");
         }
         static public void FocusBlurredElement()
         {
             if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return;
             _webBrowser.ExecuteScriptAsync("webPeeper_focusBlurredElement()");
+            Logger.Debug("FocusBlurredElement");
         }
         static public void ImeCommitText(string text)
         {
             _webBrowser?.GetBrowserHost()?.ImeCommitText(text, new(int.MaxValue, int.MaxValue), 0);
+            Logger.Debug($"ImeCommitText: {text}");
         }
         static public void ImeSetComposition(string text, int location, (int, int, uint, uint, bool)[] underlines)
         {
@@ -160,10 +168,12 @@ namespace CefHelper
             [.. underlines.Select(i => new CompositionUnderline(new(i.Item1, i.Item2), i.Item3, i.Item4, i.Item5))],
             new(int.MaxValue, int.MaxValue),
             new(location, location));
+            Logger.Debug($"ImeSetComposition: {text}");
         }
         static public void ImeFinishComposingText()
         {
             _webBrowser?.GetBrowserHost()?.ImeFinishComposingText(false);
+            Logger.Debug("ImeFinishComposingText");
         }
         static public void SendCursorEvent(int x, int y, int scrollWheelValue, MouseEventType mouseEventType, int mouseEvtFlag, bool isUseTouch)
         {
@@ -223,11 +233,13 @@ namespace CefHelper
                         Modifiers = modifiers,
                     };
                     host.SendTouchEvent(touchEvt);
+                    Logger.Debug("SendCursorEvent: left touch pressed");
                 }
                 else
                 {
                     MouseEvent mouseEvt = new(x, y, modifiers);
                     host.SendMouseClickEvent(mouseEvt, MouseButtonType.Left, false, 0);
+                    Logger.Debug("SendCursorEvent: left mouse pressed");
                 }
             }
             else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
@@ -235,6 +247,7 @@ namespace CefHelper
                 host.SendFocusEvent(true);
                 MouseEvent mouseEvt = new(x, y, modifiers);
                 host.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, false, 0);
+                Logger.Debug("SendCursorEvent: right mouse pressed");
             }
             else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
             {
@@ -251,28 +264,33 @@ namespace CefHelper
                         Modifiers = modifiers,
                     };
                     host.SendTouchEvent(touchEvt);
+                    Logger.Debug("SendCursorEvent: left touch released");
                 }
                 else
                 {
                     MouseEvent mouseEvt = new(x, y, modifiers);
                     host.SendMouseClickEvent(mouseEvt, MouseButtonType.Left, isLeftButtonPressed, 0);
+                    Logger.Debug("SendCursorEvent: left mouse released");
                 }
             }
             else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
             {
                 MouseEvent mouseEvt = new(x, y, modifiers);
                 host.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, isRightButtonPressed, 0);
+                Logger.Debug("SendCursorEvent: right mouse released");
             }
         }
         static public void SendKeyEvent(int modifiers, bool isKeyDown, int key)
         {
-            var keyEvt = new KeyEvent
+            var evt = new KeyEvent
             {
                 Modifiers = (CefEventFlags)modifiers,
                 Type = isKeyDown ? KeyEventType.KeyDown : KeyEventType.KeyUp,
                 WindowsKeyCode = key
             };
-            _webBrowser?.GetBrowserHost()?.SendKeyEvent(keyEvt);
+            _webBrowser?.GetBrowserHost()?.SendKeyEvent(evt);
+            Logger.Debug($"SendKeyEvent(key): Modifiers = {evt.Modifiers}, Type = {evt.Type}, WindowsKeyCode = {evt.WindowsKeyCode} .");
+
         }
         static public void SendKeyEvent(int msg, IntPtr wParam64, IntPtr lParam64)
         {
@@ -295,6 +313,7 @@ namespace CefHelper
                 }
             };
             _webBrowser?.GetBrowserHost()?.SendKeyEvent(evt);
+            Logger.Debug($"SendKeyEvent(msg): Modifiers = {evt.Modifiers}, Type = {evt.Type}, WindowsKeyCode = {evt.WindowsKeyCode},NativeKeyCode = {evt.NativeKeyCode}");
         }
         static CefEventFlags GetCefKeyboardModifiers(int wParam, int lParam)
         {
@@ -427,6 +446,7 @@ namespace CefHelper
         }
         static public void BlurInput()
         {
+            Logger.Debug("BlurInput");
             if (_webBrowser?.CanExecuteJavascriptInMainFrame != true) return;
             _webBrowser.ExecuteScriptAsync("webPeeper_blur()");
         }
@@ -444,6 +464,7 @@ namespace CefHelper
         }
         static public void Dispose()
         {
+            Logger.Debug("Dispose");
             Close();
             BlishHudSchemeRequested = null;
             FocusedChanged = null;

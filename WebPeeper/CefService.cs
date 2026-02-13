@@ -65,25 +65,26 @@ namespace BhModule.WebPeeper
         }
         void CleanOldData()
         {
+            WebPeeperModule.Logger.Debug("CefService.CleanOldData: cleaning WebPeeper old version data.");
             try
             {
                 var path = Path.Combine(DirectoryUtil.CachePath, "cefsharp");
                 if (Directory.Exists(path)) Directory.Delete(path, true);
             }
-            catch { }
+            catch (Exception ex) { WebPeeperModule.Logger.Error(ex.Message); }
             try
             {
                 var path = Path.Combine(Module.DataFolder, "CefUserData");
                 if (Directory.Exists(path)) Directory.Delete(path, true);
             }
-            catch { }
+            catch (Exception ex) { WebPeeperModule.Logger.Error(ex.Message); }
             try
             {
                 var errVersion = _versions[Settings.CefErrorVersion.Value];
                 Settings.CefErrorVersion.Value = CefAvailableVersion.v103;
                 Module.DownloadService.Delete(errVersion);
             }
-            catch { }
+            catch (Exception ex) { WebPeeperModule.Logger.Error(ex.Message); }
         }
         void ClearCefCache()
         {
@@ -115,6 +116,8 @@ namespace BhModule.WebPeeper
                 }
                 //Utils.SetDllDirectory(cefFolder); // not working in Wine
                 Environment.SetEnvironmentVariable("PATH", $"{_cefFolder};{Environment.GetEnvironmentVariable("PATH")}");
+
+                WebPeeperModule.Logger.Debug($"CefService.SetupCefDll: cef {CurrentVersion} path {_cefFolder}");
             }
 
             if (GameService.GameIntegration.Gw2Instance.Gw2IsRunning) setLibCefDllFolder(this, EventArgs.Empty);
@@ -123,6 +126,7 @@ namespace BhModule.WebPeeper
         void BindEventHandlers()
         {
             if (_eventHandlersBound) return;
+            WebPeeperModule.Logger.Debug($"CefService.BindEventHandlers: binding cefHelper event.");
             _eventHandlersBound = true;
             SetContextCreatedScript();
             WebPeeperModule.BlishHudInstance.Exiting += OnBlishHudExiting;
@@ -138,6 +142,7 @@ namespace BhModule.WebPeeper
         }
         void ExtractFiles()
         {
+            WebPeeperModule.Logger.Debug("CefService.ExtractFiles: extracting CefSharp default version.");
             string[] files = ["CefSharp.dll", "CefSharp.BrowserSubprocess.Core.dll", "CefSharp.BrowserSubprocess.exe", "CefSharp.Core.Runtime.dll"];
             string[] paths = [.. files.Select(f => Path.Combine(ChangePathTail(_cefSharpBhmPath, $"{DefaultVersion}"), f))];
             var destinationFolder = ChangePathTail(_cefSharpFolder, $"{DefaultVersion}");
@@ -177,24 +182,35 @@ namespace BhModule.WebPeeper
             _cefSharpFolder = ChangePathTail(_cefSharpFolder, $"{CurrentVersion}");
             _cefSharpBhmPath = ChangePathTail(_cefSharpBhmPath, $"{CurrentVersion}");
             AppDomain.CurrentDomain.AssemblyResolve += CefSharpLibResolver;
+
+            WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} path {_cefSharpFolder}");
+            WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} bhm path {_cefSharpBhmPath}");
         }
         Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
         {
             var target = new AssemblyName(args.Name).Name;
             var pending = _pendingResolveDlls.TryGetValue(target, out AssemblyLoadType loadType);
-            if (!pending) return null;
+            if (!pending)
+            {
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: not in pending, skip load");
+                return null;
+            }
             // Load(byte[]) never reused loaded, so drop loaded
             // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.assembly.load?view=net-8.0#system-reflection-assembly-load(system-byte())
             _pendingResolveDlls.Remove(target);
             target += ".dll";
             if (loadType == AssemblyLoadType.Bytes)
             {
-                var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(Path.Combine(_cefSharpBhmPath, target));
+                var filePath = Path.Combine(_cefSharpBhmPath, target);
+                var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(filePath);
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: load {filePath}");
                 return Assembly.Load(fileBytes);
             }
             else if (loadType == AssemblyLoadType.Path)
             {
-                return Assembly.LoadFrom(Path.Combine(_cefSharpFolder, target));
+                var filePath = Path.Combine(_cefSharpFolder, target);
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: load {filePath}");
+                return Assembly.LoadFrom(filePath);
             }
             return null;
         }
@@ -265,6 +281,7 @@ namespace BhModule.WebPeeper
         void SetupLib()
         {
             if (LibLoadStarted) return;
+            WebPeeperModule.Logger.Debug("CefService.SetupLib");
             LibLoadStarted = true;
             CefVersionSettingView.UpdateView?.Invoke();
             LibLoadStart?.Invoke(this, EventArgs.Empty);
@@ -311,6 +328,7 @@ namespace BhModule.WebPeeper
         }
         public Task StartBrowsing()
         {
+            WebPeeperModule.Logger.Debug("CefService.StartBrowsing");
             return Task.Run(async () =>
              {
                  SetupLib();
