@@ -31,7 +31,7 @@ namespace BhModule.WebPeeper
         static string _cefSharpFolder = Path.Combine(CefSharpVersionsFolder, $"{CurrentVersion}");
         static string _cefSharpBhmPath = Path.Combine("cef", $"{CurrentVersion}");
         static readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
-        static public event EventHandler LibLoadStart;
+        static public event EventHandler LibLoadStart; // trigger once only
         static public bool LibLoadStarted { get; private set; } = false;
         bool _eventHandlersBound = false;
         static public IReadOnlyDictionary<CefAvailableVersion, CefPkgVersion> Versions => _versions;
@@ -184,7 +184,7 @@ namespace BhModule.WebPeeper
             AppDomain.CurrentDomain.AssemblyResolve += CefSharpLibResolver;
 
             WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} path {_cefSharpFolder}");
-            WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} bhm path {_cefSharpBhmPath}");
+            WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} path .bhm\\{_cefSharpBhmPath}");
         }
         Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
         {
@@ -203,7 +203,7 @@ namespace BhModule.WebPeeper
             {
                 var filePath = Path.Combine(_cefSharpBhmPath, target);
                 var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(filePath);
-                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: load {filePath}");
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: load .bhm\\{filePath}");
                 return Assembly.Load(fileBytes);
             }
             else if (loadType == AssemblyLoadType.Path)
@@ -262,6 +262,7 @@ namespace BhModule.WebPeeper
         }
         void OnFocusedChanged(bool focused)
         {
+            WebPeeperModule.Logger.Debug($"CefService.OnFocusedChanged: focused={focused}");
             WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
             {
                 if (focused) Module.ImeService.Enable();

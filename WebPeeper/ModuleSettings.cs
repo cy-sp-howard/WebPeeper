@@ -196,6 +196,12 @@ namespace BhModule.WebPeeper
         }
         void FocusBHWindow()
         {
+            WebPeeperModule.Logger.Debug("ModuleSettings.FocusBHWindow: bring Blish.HUD to the foreground");
+            if (WebPeeperModule.BlishHudInstance.Window.IsForeground())
+            {
+                WebPeeperModule.Logger.Debug("ModuleSettings.FocusBHWindow: Blish.HUD already foreground");
+                return;
+            }
             Utils.SetForegroundWindow(WebPeeperModule.BlishHudInstance.FormHandle);
             Browser.FocusBlurredElement();
         }

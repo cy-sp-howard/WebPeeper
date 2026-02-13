@@ -150,7 +150,7 @@
   <Target Name="BuildBlishHUDModule" AfterTargets="Build">
     <Delete Files="$(WebPeeperBhmPath)" />
     <ItemGroup>
-      <RefFiles Include="$(OutDir)ref\**" />
+      <RefFiles Include="$(ProjectDir)ref\**" />
       <HelperFiles Include="$(OutDir)helpers\**" />
     </ItemGroup>
     <Copy SourceFiles="@(RefFiles)" DestinationFolder="$(TempPath)ref\%(RecursiveDir)" />

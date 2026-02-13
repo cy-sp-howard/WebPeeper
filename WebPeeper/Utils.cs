@@ -29,6 +29,10 @@ namespace BhModule.WebPeeper
         [DllImport("user32.dll")]
         internal static extern int GetKeyboardLayout(uint threadId);
         [DllImport("user32.dll")]
+        internal static extern int SetFocus(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetFocus();
+        [DllImport("user32.dll")]
         public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, UIntPtr dwNewLong);
         [DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
         public static extern bool NativeSetForegroundWindow(IntPtr hWnd);
@@ -37,7 +41,9 @@ namespace BhModule.WebPeeper
             // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow#remarks
             // simulate user input event
             keybd_event(0, 0, 0, 0);
-            return NativeSetForegroundWindow(hWnd);
+            var resuilt = NativeSetForegroundWindow(hWnd);
+            SetFocus(hWnd);
+            return resuilt;
         }
         [DllImport("user32.dll")]
         public static extern IntPtr GetForegroundWindow();

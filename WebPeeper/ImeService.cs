@@ -13,7 +13,7 @@ namespace BhModule.WebPeeper
     // https://github.com/cefsharp/CefSharp/blob/v143.0.90/CefSharp.Wpf/Internals/IMEHandler.cs
     internal class ImeService : NativeWindow
     {
-        readonly IntPtr winHandle;
+        readonly IntPtr _winHandle;
         IntPtr _himc;
         Message _m;
         object _keyStateChangedCloned;
@@ -22,14 +22,11 @@ namespace BhModule.WebPeeper
         bool _mouseLeftPressed = false;
         Action _mouseLeftReleaseCallback;
         readonly Dictionary<string, (Action<object>, Func<object>)> _keybindsBackupMap = [];
-        public ImeService(IntPtr handle)
+        public ImeService()
         {
-            winHandle = handle;
-            AssignHandle(winHandle);
-            CefService.LibLoadStart += delegate
-            {
-                WebPeeperModule.BlishHudInstance.Form.LostFocus += OnHudLostFocus;
-            };
+            _winHandle = WebPeeperModule.BlishHudInstance.FormHandle;
+            AssignHandle(_winHandle);
+            ActiveAutoBlur();
             GameService.Input.Mouse.LeftMouseButtonPressed += OnLeftMouseButtonPressed;
             GameService.Input.Mouse.LeftMouseButtonReleased += OnLeftMouseButtonReleased;
             _keybindsBackupMap.Add("KeyStateChanged", (v => { _keyStateChangedCloned = v; }, () => _keyStateChangedCloned));
@@ -96,6 +93,7 @@ namespace BhModule.WebPeeper
         }
         void OnHudLostFocus(object sender, EventArgs e)
         {
+            WebPeeperModule.Logger.Debug("ImeService.OnHudLostFocus: Blish.HUD lost focus, do BlurInput");
             Browser.BlurInput();
         }
         void SetCefComposition()
@@ -222,6 +220,7 @@ namespace BhModule.WebPeeper
         }
         void DisableAllKeybinds()
         {
+            WebPeeperModule.Logger.Debug("ImeService.DisableAllKeybinds");
             foreach (var item in _keybindsBackupMap)
             {
                 var key = item.Key;
@@ -237,8 +236,23 @@ namespace BhModule.WebPeeper
                 }
             }
         }
+        void ActiveAutoBlur()
+        {
+            void active()
+            {
+                WebPeeperModule.BlishHudInstance.Form.LostFocus -= OnHudLostFocus;
+                WebPeeperModule.BlishHudInstance.Form.LostFocus += OnHudLostFocus;
+                WebPeeperModule.BlishHudInstance.Form.GotFocus += delegate
+                {
+                    WebPeeperModule.Logger.Debug("-------------Got focus");
+                };
+            }
+            if (CefService.LibLoadStarted) active();
+            else CefService.LibLoadStart += delegate { active(); };
+        }
         void RestoreAllKeybinds()
         {
+            WebPeeperModule.Logger.Debug("ImeService.RestoreAllKeybinds");
             foreach (var item in _keybindsBackupMap)
             {
                 var key = item.Key;
@@ -256,15 +270,18 @@ namespace BhModule.WebPeeper
             if (_mouseLeftPressed) { _mouseLeftReleaseCallback = Enable; return; }
             if (_himc != IntPtr.Zero) Disable(false);
             if (WebPeeperModule.Instance.Settings.IsBlockKeybinds.Value) DisableAllKeybinds();
-            Utils.SetForegroundWindow(winHandle);
+            WebPeeperModule.Logger.Debug("ImeService.Enable: enable typing");
+            WebPeeperModule.Logger.Debug("ImeService.Enable: bring Blish.HUD to the foreground");
+            Utils.SetForegroundWindow(_winHandle);
             if (!WebPeeperModule.BlishHudInstance.Window.IsForeground())
             {
+                WebPeeperModule.Logger.Debug("ImeService.Enable: retry bring Blish.HUD to the foreground");
                 GameService.GameIntegration.Gw2Instance.FocusGw2();
-                Utils.SetForegroundWindow(winHandle);
+                Utils.SetForegroundWindow(_winHandle);
             }
             // IACE_DEFAULT = 0x0010
-            Utils.ImmAssociateContextEx(winHandle, 0x0, 0x0010);
-            _himc = Utils.ImmGetContext(winHandle);
+            Utils.ImmAssociateContextEx(_winHandle, 0x0, 0x0010);
+            _himc = Utils.ImmGetContext(_winHandle);
             Utils.ImmSetOpenStatus(_himc, true);
             SetCompositionPostion();
         }
@@ -272,8 +289,9 @@ namespace BhModule.WebPeeper
         {
             if (_himc == IntPtr.Zero) return;
             RestoreAllKeybinds();
+            WebPeeperModule.Logger.Debug("ImeService.Disable: disable typing");
             Utils.ImmSetOpenStatus(_himc, false);
-            Utils.ImmReleaseContext(winHandle, _himc);
+            Utils.ImmReleaseContext(_winHandle, _himc);
             _himc = IntPtr.Zero;
             if (tryFocusGame && WebPeeperModule.BlishHudInstance.Window.IsForeground())
             {

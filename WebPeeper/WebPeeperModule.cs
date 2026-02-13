@@ -58,7 +58,7 @@ namespace BhModule.WebPeeper
                 }) as MenuItem;
 
             CefService = new CefService();
-            ImeService = new ImeService(BlishHudInstance.FormHandle);
+            ImeService = new ImeService();
             UiService = new UiService();
             DownloadService = new DownloadService();
         }

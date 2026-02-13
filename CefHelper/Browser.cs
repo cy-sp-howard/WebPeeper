@@ -68,7 +68,7 @@ namespace CefHelper
         }
         static public Task<bool> Create(string defaultUrl, int frameRate, bool isMobile)
         {
-            Logger.Debug("Create: return if browser initialized.");
+            Logger.Debug("Create: resolve if browser initialized.");
             var tcs = new TaskCompletionSource<bool>();
             try
             {
