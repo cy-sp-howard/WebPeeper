@@ -85,7 +85,8 @@ namespace BhModule.WebPeeper
             else
             {
                 spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, _webTextureRect, _webBackgroundColor);
-                spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect);
+                // _webTexture set by another thread, it would be error
+                try { spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect); } catch { }
             }
         }
         public override void DoUpdate(GameTime gameTime)
