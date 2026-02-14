@@ -8,6 +8,7 @@ using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace BhModule.WebPeeper
@@ -22,6 +23,9 @@ namespace BhModule.WebPeeper
         }
         static Texture2D _webTexture; // dispose when module unload
         Rectangle _webTextureRect = Rectangle.Empty;
+        readonly ConcurrentQueue<(byte[], int, int, int)> _queuedWebTextureBuffer = new();
+        readonly Stopwatch _updateWebTextureTimer = Stopwatch.StartNew();
+        static readonly long _updateMaxTick = Stopwatch.Frequency * 15 / 1000;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
         bool _isTriggerMouseLeftButtonPressed = false;
         bool _isTriggerMouseRightButtonPressed = false;
@@ -91,26 +95,8 @@ namespace BhModule.WebPeeper
         }
         public override void DoUpdate(GameTime gameTime)
         {
-            if (!_mouseOver) return;
-            var ms = GameService.Input.Mouse.State; // handle mouse button event when bh window focused
-            var isLeftPressed = ms.LeftButton == ButtonState.Pressed;
-            if (isLeftPressed != _isMouseStateLeftButtonPressed)
-            {
-                _isMouseStateLeftButtonPressed = isLeftPressed;
-                if (isLeftPressed != _isTriggerMouseLeftButtonPressed) // _isTriggerMouseLeftButtonPressed trigger early
-                {
-                    MouseHandler(isLeftPressed ? MouseEventType.LeftMouseButtonPressed : MouseEventType.LeftMouseButtonReleased, ms);
-                }
-            }
-            var isRightPressed = ms.RightButton == ButtonState.Pressed;
-            if (isRightPressed != _isMouseStateRightButtonPressed)
-            {
-                _isMouseStateRightButtonPressed = isRightPressed;
-                if (isRightPressed != _isTriggerMouseRightButtonPressed)
-                {
-                    MouseHandler(isRightPressed ? MouseEventType.RightMouseButtonPressed : MouseEventType.RightMouseButtonReleased, ms);
-                }
-            }
+            UpdateWebTexture();
+            TriggerMissedMouseEvent();
         }
         void OnFrameLoadStart()
         {
@@ -128,21 +114,38 @@ namespace BhModule.WebPeeper
 
             _cefPaintProcess ??= Process.GetCurrentProcess();
             Utils.ReadProcessMemory(_cefPaintProcess.Handle, bufferHandle, buffer, bufferSize, out _);
-            if (_webTexture is null || _webTexture.Width != width || _webTexture.Height != height)
-            {
-                DisposeWebTexture();
-                using var ctx = Graphics.LendGraphicsDeviceContext();
-                _webTexture = new Texture2D(
-                         ctx.GraphicsDevice,
-                         width,
-                         height,
-                         false,
-                         SurfaceFormat.Bgra32
-                         );
-            }
-            _webTexture.SetData(buffer, 0, bufferSize);
-            ArrayPool<byte>.Shared.Return(buffer);
+            _queuedWebTextureBuffer.Enqueue((buffer, bufferSize, width, height));
             return true;
+        }
+        void ClearWebTextureBufferQueued()
+        {
+            while (_queuedWebTextureBuffer.TryDequeue(out var bufferInfo))
+            {
+                ArrayPool<byte>.Shared.Return(bufferInfo.Item1);
+            }
+        }
+        void UpdateWebTexture()
+        {
+            _updateWebTextureTimer.Restart();
+            while (_queuedWebTextureBuffer.TryDequeue(out var bufferInfo))
+            {
+                var (buffer, bufferLen, textureWidth, textureHeight) = bufferInfo;
+                if (_webTexture is null || _webTexture.Width != textureWidth || _webTexture.Height != textureHeight)
+                {
+                    DisposeWebTexture();
+                    using var ctx = Graphics.LendGraphicsDeviceContext();
+                    _webTexture = new Texture2D(
+                             ctx.GraphicsDevice,
+                             textureWidth,
+                             textureHeight,
+                             false,
+                             SurfaceFormat.Bgra32
+                             );
+                }
+                _webTexture.SetData(buffer, 0, bufferLen);
+                ArrayPool<byte>.Shared.Return(buffer);
+                if (_updateWebTextureTimer.ElapsedTicks > _updateMaxTick) break;
+            }
         }
         public void SetErrorState(bool state)
         {
@@ -186,6 +189,29 @@ namespace BhModule.WebPeeper
 
             Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
         }
+        void TriggerMissedMouseEvent()
+        {
+            if (!_mouseOver) return;
+            var ms = GameService.Input.Mouse.State; // handle mouse button event when bh window focused
+            var isLeftPressed = ms.LeftButton == ButtonState.Pressed;
+            if (isLeftPressed != _isMouseStateLeftButtonPressed)
+            {
+                _isMouseStateLeftButtonPressed = isLeftPressed;
+                if (isLeftPressed != _isTriggerMouseLeftButtonPressed) // _isTriggerMouseLeftButtonPressed trigger early
+                {
+                    MouseHandler(isLeftPressed ? MouseEventType.LeftMouseButtonPressed : MouseEventType.LeftMouseButtonReleased, ms);
+                }
+            }
+            var isRightPressed = ms.RightButton == ButtonState.Pressed;
+            if (isRightPressed != _isMouseStateRightButtonPressed)
+            {
+                _isMouseStateRightButtonPressed = isRightPressed;
+                if (isRightPressed != _isTriggerMouseRightButtonPressed)
+                {
+                    MouseHandler(isRightPressed ? MouseEventType.RightMouseButtonPressed : MouseEventType.RightMouseButtonReleased, ms);
+                }
+            }
+        }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {
             if (!_mouseOver || WebPeeperModule.BlishHudInstance.Window.IsForeground()) return;
@@ -206,6 +232,7 @@ namespace BhModule.WebPeeper
             Browser.FrameLoadStart -= OnFrameLoadStart;
             Browser.UrlLoadError -= OnUrlLoadError;
             _cefPaintProcess?.Dispose();
+            ClearWebTextureBufferQueued();
         }
         static public void DisposeWebTexture() { _webTexture?.Dispose(); _webTexture = null; }
         static CefEvtModifiresFlags GetCurrentKeyboardModifiers()
