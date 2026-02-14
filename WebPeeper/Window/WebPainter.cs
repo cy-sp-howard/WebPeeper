@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using System;
+using System.Buffers;
 using System.Diagnostics;
 
 namespace BhModule.WebPeeper
@@ -20,9 +21,7 @@ namespace BhModule.WebPeeper
                     (int)(Instance.AbsoluteBounds.Location.Y * GameService.Graphics.UIScaleMultiplier));
         }
         static Texture2D _webTexture; // dispose when module unload
-        byte[] _webTextureBufferBytes = [];
         Rectangle _webTextureRect = Rectangle.Empty;
-        CefService CefService => WebPeeperModule.Instance.CefService;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
         bool _isTriggerMouseLeftButtonPressed = false;
         bool _isTriggerMouseRightButtonPressed = false;
@@ -124,13 +123,11 @@ namespace BhModule.WebPeeper
         {
             if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true) return true;
             var bufferSize = width * height * sizeof(int);
-            if (bufferSize != _webTextureBufferBytes.Length)
-            {
-                _webTextureBufferBytes = new byte[bufferSize];
-            }
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+
             _cefPaintProcess ??= Process.GetCurrentProcess();
-            Utils.ReadProcessMemory(_cefPaintProcess.Handle, bufferHandle, _webTextureBufferBytes, bufferSize, out _);
-            if (_webTexture is null || _webTexture.Format != SurfaceFormat.Bgra32 || _webTexture.Width != width || _webTexture.Height != height)
+            Utils.ReadProcessMemory(_cefPaintProcess.Handle, bufferHandle, buffer, bufferSize, out _);
+            if (_webTexture is null || _webTexture.Width != width || _webTexture.Height != height)
             {
                 DisposeWebTexture();
                 using var ctx = Graphics.LendGraphicsDeviceContext();
@@ -142,7 +139,8 @@ namespace BhModule.WebPeeper
                          SurfaceFormat.Bgra32
                          );
             }
-            _webTexture.SetData(_webTextureBufferBytes);
+            _webTexture.SetData(buffer, 0, bufferSize);
+            ArrayPool<byte>.Shared.Return(buffer);
             return true;
         }
         public void SetErrorState(bool state)
