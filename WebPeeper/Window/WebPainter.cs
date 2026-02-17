@@ -1,34 +1,36 @@
 ﻿using Blish_HUD;
 using Blish_HUD.Controls;
 using Blish_HUD.Input;
-using CefSharp;
-using CefSharp.Enums;
-using CefSharp.OffScreen;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoGame.Extended;
 using System;
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace BhModule.WebPeeper
 {
-    public class WebPainter : Control
+    internal class WebPainter : Control
     {
-        public static WebPainter Instance;
+        public static WebPainter Instance { get; private set; }
         public Point LocationAtForm
         {
             get => Instance is null ? Point.Zero : new((int)(Instance.AbsoluteBounds.Location.X * GameService.Graphics.UIScaleMultiplier),
                     (int)(Instance.AbsoluteBounds.Location.Y * GameService.Graphics.UIScaleMultiplier));
         }
-        static Texture2D _webTexture;
-        byte[] _webTextureBufferBytes = [];
+        static Texture2D _webTexture; // dispose when module unload
         Rectangle _webTextureRect = Rectangle.Empty;
-        CefService CefService => WebPeeperModule.Instance.CefService;
+        readonly ConcurrentQueue<(byte[], int, int, int)> _queuedWebTextureBuffer = new();
+        readonly Stopwatch _updateWebTextureTimer = Stopwatch.StartNew();
+        static readonly long _updateMaxTick = Stopwatch.Frequency * 15 / 1000;
         ModuleSettings Settings => WebPeeperModule.Instance.Settings;
-        ChromiumWebBrowser WebBrowser => CefService.WebBrowser;
-        bool _isLeftMouseButtonPressed = false;
-        bool _isRightMouseButtonPressed = false;
+        bool _isTriggerMouseLeftButtonPressed = false;
+        bool _isTriggerMouseRightButtonPressed = false;
+        bool _isMouseStateLeftButtonPressed = false;
+        bool _isMouseStateRightButtonPressed = false;
         static bool _isError = false;
         static readonly Texture2D _errorTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("error.png");
         static readonly Texture2D _quesTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("what.png");
@@ -41,128 +43,35 @@ namespace BhModule.WebPeeper
         public WebPainter()
         {
             Instance = this;
-            if (WebBrowser is not null) WebBrowser.Paint += CefOnPaint;
+            Browser.Paint += CefOnPaint;
+            Browser.FrameLoadStart += OnFrameLoadStart;
+            Browser.UrlLoadError += OnUrlLoadError;
             GameService.Input.Keyboard.KeyStateChanged += KeyboardHandler;
             ApplyBgTexture();
-            if (_webTexture is null) CefService.GetScreenshot().ContinueWith(t =>
-            {
-                if (_webTexture is not null) return;
-                _webTexture = t.Result;
-            });
+            Browser.Repaint();
         }
         public override Control TriggerMouseInput(MouseEventType mouseEventType, MouseState ms)
         {
-            if (WebBrowser is not null && WebBrowser.IsBrowserInitialized && !Disabled)
-            {
-                var isUseTouch = Settings.IsUseTouch.Value;
-                var borwserHost = WebBrowser.GetBrowserHost();
-                var ctrlPos = ms.Position - AbsoluteBounds.Location;
-                CefEventFlags mouseEvtFlag = GetCurrentKeyboardModifiers();
-                if (_isLeftMouseButtonPressed) mouseEvtFlag |= CefEventFlags.LeftMouseButton;
-                else if (_isRightMouseButtonPressed) mouseEvtFlag |= CefEventFlags.RightMouseButton;
-
-                if (mouseEventType == MouseEventType.MouseMoved)
-                {
-                    if (isUseTouch && _isLeftMouseButtonPressed)
-                    {
-                        CefSharp.Structs.TouchEvent touchEvt = new()
-                        {
-                            Id = 1,
-                            X = (float)ctrlPos.X,
-                            Y = (float)ctrlPos.Y,
-                            PointerType = PointerType.Touch,
-                            Pressure = 1,
-                            Type = TouchEventType.Moved,
-                            Modifiers = mouseEvtFlag,
-                        };
-                        borwserHost.SendTouchEvent(touchEvt);
-                    }
-                    else
-                    {
-                        MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                        borwserHost.SendMouseMoveEvent(mouseEvt, false);
-                    }
-                }
-                else if (mouseEventType == MouseEventType.MouseWheelScrolled)
-                {
-                    MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                    var wheelValue = ms.ScrollWheelValue < -1000 ? 240 : ms.ScrollWheelValue;
-                    if (mouseEvtFlag.HasFlag(CefEventFlags.ControlDown) && !mouseEvtFlag.HasFlag(CefEventFlags.AltDown) && !mouseEvtFlag.HasFlag(CefEventFlags.ShiftDown))
-                    {
-                        Zoom(wheelValue > 0 ? 1 : -1);
-                    }
-                    else
-                    {
-                        borwserHost.SendMouseWheelEvent(mouseEvt, 0, wheelValue);
-                    }
-                }
-                else if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
-                {
-                    borwserHost.SendFocusEvent(true);
-                    if (isUseTouch)
-                    {
-                        CefSharp.Structs.TouchEvent touchEvt = new()
-                        {
-                            Id = 1,
-                            X = (float)ctrlPos.X,
-                            Y = (float)ctrlPos.Y,
-                            PointerType = PointerType.Touch,
-                            Pressure = 1,
-                            Type = TouchEventType.Pressed,
-                            Modifiers = mouseEvtFlag,
-                        };
-                        borwserHost.SendTouchEvent(touchEvt);
-                    }
-                    else
-                    {
-                        MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                        borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Left, false, 0);
-                    }
-                    _isLeftMouseButtonPressed = true;
-                }
-                else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
-                {
-                    borwserHost.SendFocusEvent(true);
-                    MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                    borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, false, 0);
-                    _isRightMouseButtonPressed = true;
-                }
-                else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
-                {
-                    if (isUseTouch)
-                    {
-                        CefSharp.Structs.TouchEvent touchEvt = new()
-                        {
-                            Id = 1,
-                            X = (float)ctrlPos.X,
-                            Y = (float)ctrlPos.Y,
-                            PointerType = PointerType.Touch,
-                            Pressure = 1,
-                            Type = TouchEventType.Released,
-                            Modifiers = mouseEvtFlag,
-                        };
-                        borwserHost.SendTouchEvent(touchEvt);
-                    }
-                    else
-                    {
-                        MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                        borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Left, _isLeftMouseButtonPressed, 0);
-                    }
-                    _isLeftMouseButtonPressed = false;
-                }
-                else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
-                {
-                    MouseEvent mouseEvt = new(ctrlPos.X, ctrlPos.Y, mouseEvtFlag);
-                    borwserHost.SendMouseClickEvent(mouseEvt, MouseButtonType.Right, _isRightMouseButtonPressed, 0);
-                    _isRightMouseButtonPressed = false;
-                }
-            }
+            // only work when bh window not focused
+            if (!Disabled) { MouseHandler(mouseEventType, ms); }
             return base.TriggerMouseInput(mouseEventType, ms);
+        }
+        protected override void OnMouseLeft(MouseEventArgs e)
+        {
+            if (_isTriggerMouseLeftButtonPressed)
+            {
+                MouseHandler(MouseEventType.LeftMouseButtonReleased, GameService.Input.Mouse.State);
+            }
+            if (_isTriggerMouseRightButtonPressed)
+            {
+                MouseHandler(MouseEventType.RightMouseButtonReleased, GameService.Input.Mouse.State);
+            }
+            base.OnMouseLeft(e);
         }
         protected override void OnResized(ResizedEventArgs e)
         {
             _webTextureRect.Size = Size;
-            CefService.SetBrowserSize(Width, Height);
+            Browser.SetSize(Width, Height);
             SetErrorTextureRect();
             base.OnResized(e);
         }
@@ -180,33 +89,63 @@ namespace BhModule.WebPeeper
             else
             {
                 spriteBatch.DrawOnCtrl(this, ContentService.Textures.Pixel, _webTextureRect, _webBackgroundColor);
-                spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect);
+                // _webTexture set by another thread, it would be error
+                try { spriteBatch.DrawOnCtrl(this, _webTexture, _webTextureRect); } catch { }
             }
         }
-        void CefOnPaint(object sender, OnPaintEventArgs e)
+        public override void DoUpdate(GameTime gameTime)
         {
-            e.Handled = true;
-            if (!WebPeeperModule.Instance.UIService.BrowserWindow.Visible) return;
-            var bufferSize = e.Width * e.Height * sizeof(int);
-            if (bufferSize != _webTextureBufferBytes.Length)
-            {
-                _webTextureBufferBytes = new byte[bufferSize];
-            }
+            UpdateWebTexture();
+            TriggerMissedMouseEvent();
+        }
+        void OnFrameLoadStart()
+        {
+            SetErrorState(false);
+        }
+        public void OnUrlLoadError(string url)
+        {
+            SetErrorState(true);
+        }
+        bool CefOnPaint(IntPtr bufferHandle, int width, int height)
+        {
+            if (WebPeeperModule.Instance.UiService?.BrowserWindow?.Visible != true) return true;
+            var bufferSize = width * height * sizeof(int);
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+
             _cefPaintProcess ??= Process.GetCurrentProcess();
-            Utils.ReadProcessMemory(_cefPaintProcess.Handle, e.BufferHandle, _webTextureBufferBytes, bufferSize, out _);
-            if (_webTexture is null || _webTexture.Format != SurfaceFormat.Bgra32 || _webTexture.Width != e.Width || _webTexture.Height != e.Height)
+            Utils.ReadProcessMemory(_cefPaintProcess.Handle, bufferHandle, buffer, bufferSize, out _);
+            _queuedWebTextureBuffer.Enqueue((buffer, bufferSize, width, height));
+            return true;
+        }
+        void ClearWebTextureBufferQueued()
+        {
+            while (_queuedWebTextureBuffer.TryDequeue(out var bufferInfo))
             {
-                DisposeWebTexture();
-                using var ctx = Graphics.LendGraphicsDeviceContext();
-                _webTexture = new Texture2D(
-                         ctx.GraphicsDevice,
-                         e.Width,
-                         e.Height,
-                         false,
-                         SurfaceFormat.Bgra32
-                         );
+                ArrayPool<byte>.Shared.Return(bufferInfo.Item1);
             }
-            _webTexture.SetData(_webTextureBufferBytes);
+        }
+        void UpdateWebTexture()
+        {
+            _updateWebTextureTimer.Restart();
+            while (_queuedWebTextureBuffer.TryDequeue(out var bufferInfo))
+            {
+                var (buffer, bufferLen, textureWidth, textureHeight) = bufferInfo;
+                if (_webTexture is null || _webTexture.Width != textureWidth || _webTexture.Height != textureHeight)
+                {
+                    DisposeWebTexture();
+                    using var ctx = Graphics.LendGraphicsDeviceContext();
+                    _webTexture = new Texture2D(
+                             ctx.GraphicsDevice,
+                             textureWidth,
+                             textureHeight,
+                             false,
+                             SurfaceFormat.Bgra32
+                             );
+                }
+                _webTexture.SetData(buffer, 0, bufferLen);
+                ArrayPool<byte>.Shared.Return(buffer);
+                if (_updateWebTextureTimer.ElapsedTicks > _updateMaxTick) break;
+            }
         }
         public void SetErrorState(bool state)
         {
@@ -224,55 +163,106 @@ namespace BhModule.WebPeeper
             var quesTextureSize = (int)(errTextureSize * 0.2);
             _questionTextureRect = new((int)(errTextureSize * 0.7), Size.Y - (int)(errTextureSize * 1.05), quesTextureSize, quesTextureSize);
         }
+        void MouseHandler(MouseEventType mouseEventType, MouseState ms)
+        {
+            var ctrlPos = ms.Position - AbsoluteBounds.Location;
+            var mouseEvtFlag = GetCurrentKeyboardModifiers();
+            if (_isTriggerMouseLeftButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.LeftMouseButton;
+            else if (_isTriggerMouseRightButtonPressed) mouseEvtFlag |= CefEvtModifiresFlags.RightMouseButton;
+
+            if (mouseEventType == MouseEventType.LeftMouseButtonPressed)
+            {
+                _isTriggerMouseLeftButtonPressed = true;
+            }
+            else if (mouseEventType == MouseEventType.RightMouseButtonPressed)
+            {
+                _isTriggerMouseRightButtonPressed = true;
+            }
+            else if (mouseEventType == MouseEventType.LeftMouseButtonReleased)
+            {
+                _isTriggerMouseLeftButtonPressed = false;
+            }
+            else if (mouseEventType == MouseEventType.RightMouseButtonReleased)
+            {
+                _isTriggerMouseRightButtonPressed = false;
+            }
+
+            Browser.SendCursorEvent(ctrlPos.X, ctrlPos.Y, ms.ScrollWheelValue, mouseEventType, (int)mouseEvtFlag, Settings.IsUseTouch.Value);
+        }
+        void TriggerMissedMouseEvent()
+        {
+            if (!_mouseOver) return;
+            var ms = GameService.Input.Mouse.State; // handle mouse button event when bh window focused
+            var isLeftPressed = ms.LeftButton == ButtonState.Pressed;
+            if (isLeftPressed != _isMouseStateLeftButtonPressed)
+            {
+                _isMouseStateLeftButtonPressed = isLeftPressed;
+                if (isLeftPressed != _isTriggerMouseLeftButtonPressed) // _isTriggerMouseLeftButtonPressed trigger early
+                {
+                    MouseHandler(isLeftPressed ? MouseEventType.LeftMouseButtonPressed : MouseEventType.LeftMouseButtonReleased, ms);
+                }
+            }
+            var isRightPressed = ms.RightButton == ButtonState.Pressed;
+            if (isRightPressed != _isMouseStateRightButtonPressed)
+            {
+                _isMouseStateRightButtonPressed = isRightPressed;
+                if (isRightPressed != _isTriggerMouseRightButtonPressed)
+                {
+                    MouseHandler(isRightPressed ? MouseEventType.RightMouseButtonPressed : MouseEventType.RightMouseButtonReleased, ms);
+                }
+            }
+        }
         void KeyboardHandler(object sender, KeyboardEventArgs e)
         {
-            if (WebBrowser is null || !WebBrowser.IsBrowserInitialized || !_mouseOver || WebPeeperModule.BlishHudInstance.Form.Focused) return;
-            var keyEvt = new KeyEvent
+            if (!_mouseOver || WebPeeperModule.BlishHudInstance.Window.IsForeground()) return;
+            var isKeyDown = e.EventType == KeyboardEventType.KeyDown;
+            var key = e.Key switch
             {
-                Modifiers = GetCurrentKeyboardModifiers(),
-                Type = e.EventType == KeyboardEventType.KeyDown ? KeyEventType.KeyDown : KeyEventType.KeyUp,
-                WindowsKeyCode = e.Key switch
-                {
-                    Keys.LeftAlt or Keys.RightAlt => (int)VK.MENU,
-                    Keys.LeftControl or Keys.RightControl => (int)VK.CONTROL,
-                    Keys.LeftShift or Keys.RightShift => (int)VK.SHIFT,
-                    _ => (int)e.Key,
-                }
+                Keys.LeftAlt or Keys.RightAlt => (int)VK.MENU,
+                Keys.LeftControl or Keys.RightControl => (int)VK.CONTROL,
+                Keys.LeftShift or Keys.RightShift => (int)VK.SHIFT,
+                _ => (int)e.Key,
             };
-            WebBrowser.GetBrowserHost().SendKeyEvent(keyEvt);
-        }
-        public void Zoom(float rate)
-        {
-            if (WebBrowser is null) return;
-            var getLevelTask = WebBrowser.GetZoomLevelAsync();
-            getLevelTask.Wait(TimeSpan.FromSeconds(1));
-            if (getLevelTask.IsCanceled) return;
-            WebBrowser.SetZoomLevel(getLevelTask.Result + 0.2f * rate);
+            Browser.SendKeyEvent((int)GetCurrentKeyboardModifiers(), isKeyDown, key);
         }
         protected override void DisposeControl()
         {
             GameService.Input.Keyboard.KeyStateChanged -= KeyboardHandler;
-            if (WebBrowser is not null) WebBrowser.Paint -= CefOnPaint;
+            Browser.Paint -= CefOnPaint;
+            Browser.FrameLoadStart -= OnFrameLoadStart;
+            Browser.UrlLoadError -= OnUrlLoadError;
             _cefPaintProcess?.Dispose();
+            ClearWebTextureBufferQueued();
         }
         static public void DisposeWebTexture() { _webTexture?.Dispose(); _webTexture = null; }
-        static CefEventFlags GetCurrentKeyboardModifiers()
+        static CefEvtModifiresFlags GetCurrentKeyboardModifiers()
         {
-            var cefModifiers = CefEventFlags.None;
+            var cefModifiers = CefEvtModifiresFlags.None;
             var monoModifiers = GameService.Input.Keyboard.ActiveModifiers;
             if (monoModifiers.HasFlag(ModifierKeys.Ctrl))
             {
-                cefModifiers |= CefEventFlags.ControlDown;
+                cefModifiers |= CefEvtModifiresFlags.ControlDown;
             }
             if (monoModifiers.HasFlag(ModifierKeys.Alt))
             {
-                cefModifiers |= CefEventFlags.AltDown;
+                cefModifiers |= CefEvtModifiresFlags.AltDown;
             }
             if (monoModifiers.HasFlag(ModifierKeys.Shift))
             {
-                cefModifiers |= CefEventFlags.ShiftDown;
+                cefModifiers |= CefEvtModifiresFlags.ShiftDown;
             }
             return cefModifiers;
+        }
+        enum CefEvtModifiresFlags : uint
+        {
+            None = 0u,
+            CapsLockOn = 1u,
+            ShiftDown = 2u,
+            ControlDown = 4u,
+            AltDown = 8u,
+            LeftMouseButton = 0x10u,
+            MiddleMouseButton = 0x20u,
+            RightMouseButton = 0x40u,
         }
     }
 }

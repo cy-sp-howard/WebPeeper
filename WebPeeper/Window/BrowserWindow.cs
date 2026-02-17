@@ -2,7 +2,7 @@
 using Blish_HUD.Common.UI.Views;
 using Blish_HUD.Controls;
 using Blish_HUD.Input;
-using CefSharp;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
 {
-    public class BrowserWindow : StandardWindow
+    internal class BrowserWindow : StandardWindow
     {
         static readonly Point _windowSize = new(500, 700);
         static readonly Point _windowBgOffset = new(-35, -30);
@@ -135,7 +135,7 @@ namespace BhModule.WebPeeper
             });
             return tcs.Task;
         }
-        protected override void OnShown(EventArgs e)
+        void HandleShown()
         {
             if (_firstShow)
             {
@@ -145,25 +145,29 @@ namespace BhModule.WebPeeper
                 var maxWidth = Parent.Width - 200;
                 if (Width > maxWidth) Width = maxWidth;
             }
-            if (CefService.WebBrowser == null) return;
             if (Settings.IsAutoPauseWeb.Value)
             {
-                CefService.WebBrowser?.GetBrowserHost().WasHidden(false);
+                Browser.WasHidden(false);
             }
+        }
+        void HandleHidden()
+        {
+            Browser.BlurInput();
+            if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
+            else if (Settings.IsAutoPauseWeb.Value)
+            {
+                Browser.WasHidden(true);
+            }
+            BookmarkPanel.Instance?.SetChildrenEditState(false);
+        }
+        protected override void OnShown(EventArgs e)
+        {
+            if (CefService.LibLoadStarted) HandleShown();
             base.OnShown(e);
         }
         protected override void OnHidden(EventArgs e)
         {
-            if (CefService.WebBrowser is not null)
-            {
-                if (CefService.WebBrowser.CanExecuteJavascriptInMainFrame) CefService.WebBrowser.ExecuteScriptAsync("webPeeper_blur()");
-                if (Settings.IsAutoQuitProcess.Value) CefService.CloseWebBrowser();
-                else if (Settings.IsAutoPauseWeb.Value)
-                {
-                    CefService.WebBrowser?.GetBrowserHost().WasHidden(true);
-                }
-            }
-            BookmarkPanel.Instance?.SetChildrenEditState(false);
+            if (CefService.LibLoadStarted) HandleHidden();
             base.OnHidden(e);
         }
         public override void RecalculateLayout()

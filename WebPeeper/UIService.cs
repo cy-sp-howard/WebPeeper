@@ -4,10 +4,10 @@ using System.Collections.Generic;
 
 namespace BhModule.WebPeeper
 {
-    public class UIService
+    internal class UiService
     {
-        private CornerIcon _browserCornerIcon;
-        private BrowserWindow _browserWindow;
+        CornerIcon _browserCornerIcon;
+        BrowserWindow _browserWindow;
         public BrowserWindow BrowserWindow { get => _browserWindow; }
         public void Load()
         {
@@ -34,11 +34,11 @@ namespace BhModule.WebPeeper
             GameService.Overlay.BlishHudWindow.Show();
             menuItem.Select();
         }
-        private void BuildBrowserWindow()
+        void BuildBrowserWindow()
         {
             _browserWindow = new BrowserWindow();
         }
-        private void BuildCornerIcon()
+        void BuildCornerIcon()
         {
             var Content = GameService.Content;
             _browserCornerIcon = new CornerIcon(
@@ -59,11 +59,12 @@ namespace BhModule.WebPeeper
             yield return settings;
 
             var disposeBrowser = new ContextMenuStripItem("Quit Process");
-            disposeBrowser.Click += delegate { WebPeeperModule.Instance.CefService.CloseWebBrowser(); };
+            disposeBrowser.Click += delegate
+            {
+                if (!CefService.LibLoadStarted) return;
+                WebPeeperModule.Instance.CefService.CloseWebBrowser();
+            };
             yield return disposeBrowser;
-
         }
-
-
     }
 }

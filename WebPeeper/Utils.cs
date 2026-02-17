@@ -7,11 +7,11 @@ using System.Runtime.InteropServices;
 
 namespace BhModule.WebPeeper
 {
-    public static class Utils
+    internal static class Utils
     {
 
         [DllImport("imm32.dll")]
-        internal static extern IntPtr ImmAssociateContextEx(IntPtr hWnd, int hIMC, int iace);
+        internal static extern bool ImmAssociateContextEx(IntPtr hWnd, int hIMC, int iace);
         [DllImport("imm32.dll")]
         internal static extern IntPtr ImmGetContext(IntPtr hWnd);
         [DllImport("imm32.dll")]
@@ -29,6 +29,10 @@ namespace BhModule.WebPeeper
         [DllImport("user32.dll")]
         internal static extern int GetKeyboardLayout(uint threadId);
         [DllImport("user32.dll")]
+        internal static extern int SetFocus(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetFocus();
+        [DllImport("user32.dll")]
         public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, UIntPtr dwNewLong);
         [DllImport("user32.dll", EntryPoint = "SetForegroundWindow")]
         public static extern bool NativeSetForegroundWindow(IntPtr hWnd);
@@ -37,26 +41,30 @@ namespace BhModule.WebPeeper
             // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setforegroundwindow#remarks
             // simulate user input event
             keybd_event(0, 0, 0, 0);
-            return NativeSetForegroundWindow(hWnd);
+            var resuilt = NativeSetForegroundWindow(hWnd);
+            SetFocus(hWnd);
+            return resuilt;
         }
         [DllImport("user32.dll")]
         public static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")]
         public static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
         [DllImport("user32.dll")]
-        public static extern short GetKeyState(VK nVirtKey);
-        [DllImport("user32.dll")]
         public static extern bool ClientToScreen(IntPtr hWnd, ref System.Drawing.Point lpPoint);
         [DllImport("kernel32.dll")]
         public static extern bool SetDllDirectory(string lpPathName);
         [DllImport("kernel32.dll")]
         public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int nSize, out IntPtr lpNumberOfBytesRead);
+        public static bool IsForeground(this GameWindow window)
+        {
+            return GetForegroundWindow() == window.Handle;
+        }
         public static void SafeInvoke(this System.Windows.Forms.Form form, Action cb)
         {
             if (form.IsDisposed || !form.IsHandleCreated) return;
             form.Invoke(cb);
         }
-        public static NotifyClass Notify = new();
+        public static readonly NotifyClass Notify = new();
     }
     [StructLayout(LayoutKind.Sequential)]
     public struct CompositionForm
@@ -69,14 +77,57 @@ namespace BhModule.WebPeeper
         public int Right;
         public int Bottom;
     }
-
-
-    public class NotifyClass : Control
+    internal class CefPkgVersion(string cefSharpversion, string cefVersion = "")
     {
-        private float duration = 3000;
-        private string message;
-        private bool waitingForPaint = true;
-        private DateTime msgStartTime = DateTime.Now;
+        readonly public Version CefSharp = new(cefSharpversion);
+        readonly public Version Cef = new(string.IsNullOrEmpty(cefVersion) ? cefSharpversion : cefVersion);
+        public override string ToString()
+        {
+            return CefSharp.ToString();
+        }
+        public override bool Equals(object obj)
+        {
+            if (obj is CefPkgVersion cefVerObj)
+            {
+                return cefVerObj == this;
+            }
+            return false;
+        }
+        public override int GetHashCode()
+        {
+            return this.CefSharp.GetHashCode();
+        }
+        public static bool operator >(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp > v2.CefSharp;
+        }
+        public static bool operator <(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp < v2.CefSharp;
+        }
+        public static bool operator >=(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp > v2.CefSharp;
+        }
+        public static bool operator <=(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp < v2.CefSharp;
+        }
+        public static bool operator ==(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp == v2.CefSharp;
+        }
+        public static bool operator !=(CefPkgVersion v1, CefPkgVersion v2)
+        {
+            return v1.CefSharp != v2.CefSharp;
+        }
+    }
+    internal class NotifyClass : Control
+    {
+        float _duration = 3000;
+        string _message;
+        bool _waitingForPaint = true;
+        DateTime _msgStartTime = DateTime.Now;
         public override void DoUpdate(GameTime gameTime)
         {
             Size = new Point(Parent.Size.X, 200);
@@ -84,11 +135,11 @@ namespace BhModule.WebPeeper
         }
         protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
         {
-            if (message != null)
+            if (_message != null)
             {
-                if (waitingForPaint) msgStartTime = DateTime.Now;
-                float existTime = (float)(DateTime.Now - msgStartTime).TotalMilliseconds;
-                float remainTime = duration - (float)existTime;
+                if (_waitingForPaint) _msgStartTime = DateTime.Now;
+                float existTime = (float)(DateTime.Now - _msgStartTime).TotalMilliseconds;
+                float remainTime = _duration - (float)existTime;
                 float opacity = remainTime > 1000 ? 1 : remainTime / 1000;
                 if (opacity < 0)
                 {
@@ -96,84 +147,26 @@ namespace BhModule.WebPeeper
                     return;
                 }
                 Color textColor = Color.Yellow * opacity;
-                spriteBatch.DrawStringOnCtrl(this, message, GameService.Content.DefaultFont32, new Rectangle(0, 0, Width, Height), textColor, false, false, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
+                spriteBatch.DrawStringOnCtrl(this, _message, GameService.Content.DefaultFont32, new Rectangle(0, 0, Width, Height), textColor, false, false, 1, HorizontalAlignment.Center, VerticalAlignment.Top);
             }
-            waitingForPaint = false;
+            _waitingForPaint = false;
         }
         public void Clear()
         {
             Parent = null;
-            message = null;
+            _message = null;
         }
         public void Show(string text, float duration = 3000)
         {
             Parent = GameService.Graphics.SpriteScreen;
-            msgStartTime = DateTime.Now;
-            message = text;
-            this.duration = duration;
+            _msgStartTime = DateTime.Now;
+            _message = text;
+            _duration = duration;
         }
         protected override CaptureType CapturesInput()
         {
             return CaptureType.None;
         }
-    }
-    /// <summary>
-    /// Copy from CefSharp.Wpf
-    /// Windows Message Enums
-    /// Gratiosly based on http://www.pinvoke.net/default.aspx/Enums/WindowsMessages.html
-    /// </summary>
-    public enum WM
-    {
-        KEYDOWN = 0x0100,
-        KEYUP = 0x0101,
-        CHAR = 0x0102,
-        IME_COMPOSITION = 0x010F,
-        IME_ENDCOMPOSITION = 0x010E,
-        IME_STARTCOMPOSITION = 0x010D,
-    }
-    public enum VK
-    {
-        CLEAR = 0x0C,
-        RETURN = 0x0D,
-        SHIFT = 0x10,
-        CONTROL = 0x11,
-        MENU = 0x12,
-        CAPITAL = 0x14,
-        CONVERT = 0x1C,
-        PRIOR = 0x21,
-        NEXT = 0x22,
-        END = 0x23,
-        HOME = 0x24,
-        LEFT = 0x25,
-        UP = 0x26,
-        RIGHT = 0x27,
-        DOWN = 0x28,
-        INSERT = 0x2D,
-        DELETE = 0x2E,
-        LWIN = 0x5B,
-        RWIN = 0x5C,
-        NUMPAD0 = 0x60,
-        NUMPAD1 = 0x61,
-        NUMPAD2 = 0x62,
-        NUMPAD3 = 0x63,
-        NUMPAD4 = 0x64,
-        NUMPAD5 = 0x65,
-        NUMPAD6 = 0x66,
-        NUMPAD7 = 0x67,
-        NUMPAD8 = 0x68,
-        NUMPAD9 = 0x69,
-        MULTIPLY = 0x6A,
-        ADD = 0x6B,
-        SUBTRACT = 0x6D,
-        DECIMAL = 0x6E,
-        DIVIDE = 0x6F,
-        NUMLOCK = 0x90,
-        LSHIFT = 0xA0,
-        RSHIFT = 0xA1,
-        LCONTROL = 0xA2,
-        RCONTROL = 0xA3,
-        LMENU = 0xA4,
-        RMENU = 0xA5,
     }
     public enum GCS
     {

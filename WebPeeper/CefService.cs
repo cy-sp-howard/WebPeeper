@@ -1,177 +1,221 @@
 ﻿using Blish_HUD;
-using Blish_HUD.Graphics;
-using Blish_HUD.Input;
-using CefSharp;
-using CefSharp.Internals;
-using CefSharp.OffScreen;
-using CefSharp.Structs;
+using CefHelper;
 using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace BhModule.WebPeeper
 {
-    public class CefService
+    internal class CefService
     {
-        public string CefSharpDllPath;
-        public string CefSettingFolder;
+        static WebPeeperModule Module => WebPeeperModule.Instance;
+        static ModuleSettings Settings => Module.Settings;
+        static readonly Dictionary<CefAvailableVersion, CefPkgVersion> _versions = new() {
+            { CefAvailableVersion.v103, new("103.0.90","103.0.9") },
+            { CefAvailableVersion.v144, new("144.0.120","144.0.12") },
+        };
+        static public CefPkgVersion CurrentVersion { get; private set; } = _versions[Settings.CefVersion.Value];
+        static string CefSharpVersionsFolder => DirectoryUtil.RegisterDirectory(Module.DataFolder, "CefVersions");
+        static string CefCacheFolder => DirectoryUtil.RegisterDirectory(Module.DataFolder, "CefCache");
+        static string _cefFolder = Path.Combine(CefSharpVersionsFolder, $"{CurrentVersion}");
+        static string _cefSharpFolder = Path.Combine(CefSharpVersionsFolder, $"{CurrentVersion}");
+        static string _cefSharpBhmPath = Path.Combine("cef", $"{CurrentVersion}");
+        static readonly Dictionary<string, AssemblyLoadType> _pendingResolveDlls = [];
+        static public event EventHandler LibLoadStart; // trigger once only
+        static public bool LibLoadStarted { get; private set; } = false;
+        bool _eventHandlersBound = false;
+        static public IReadOnlyDictionary<CefAvailableVersion, CefPkgVersion> Versions => _versions;
+        static readonly CefPkgVersion _suggestionVersion = _versions[CefAvailableVersion.v144];
+        static public readonly CefPkgVersion DefaultVersion = _versions[CefAvailableVersion.v103];
 
-        private ChromiumWebBrowser _webBrowser;
-        public ChromiumWebBrowser WebBrowser { get => _webBrowser; }
-        public InputMethod InputMethod { get => _inputMethod; }
-        readonly InputMethod _inputMethod;
-        public string LastAddressInputText = "";
-
-        const string _mobileUserAgent = "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Mobile Safari/537.36";
-        const string _defaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36";
-        string OnContextCreatedScript;
-        string _cefLocalesPath;
-        public CefService()
-        {
-            CefSharpDllPath = DirectoryUtil.RegisterDirectory(DirectoryUtil.CachePath, "cefsharp/");
-            CefSettingFolder = WebPeeperModule.Instance.DirectoriesManager.GetFullDirectoryPath("webpeeper");
-            SetupCefDllPath();
-            SetupCefSharpDllFolder();
-            _inputMethod = new InputMethod();
-            WebPeeperModule.BlishHudInstance.Exiting += OnBlishHudExiting;
-        }
+        static bool IsDefaultVersion => CurrentVersion == DefaultVersion;
+        static public bool Outdated => CurrentVersion < _suggestionVersion;
         public void Load()
         {
-            LoadOnContextCreatedScript();
+            CleanOldData();
+            ExtractFiles();
+            _ = Module.DownloadService.Download(CurrentVersion);
         }
         public void Unload()
         {
+            LibLoadStart = null;
             WebPeeperModule.BlishHudInstance.Exiting -= OnBlishHudExiting;
-            AppDomain.CurrentDomain.AssemblyResolve -= CefSharpCoreRuntimeResolver;
-            _webBrowser?.Dispose();
-            _webBrowser = null;
-            _inputMethod.Dispose();
+            AppDomain.CurrentDomain.AssemblyResolve -= CefSharpLibResolver;
+            if (LibLoadStarted) OnBlishHudExiting(this, EventArgs.Empty); // prevent load cefHelper so use OnBlishHudExiting 
         }
-        void SetupCefDllPath()
+        public void ApplySettingVersion()
+        {
+            var newVersion = _versions[Settings.CefVersion.Value];
+            if (LibLoadStarted) return;
+            CurrentVersion = newVersion;
+        }
+        public string GetCefSharpFolder(CefPkgVersion version)
+        {
+            return Path.Combine(CefSharpVersionsFolder, version.ToString());
+        }
+        void CleanOldData()
+        {
+            WebPeeperModule.Logger.Debug("CefService.CleanOldData: cleaning WebPeeper old version data.");
+            try
+            {
+                var path = Path.Combine(DirectoryUtil.CachePath, "cefsharp");
+                if (Directory.Exists(path)) Directory.Delete(path, true);
+            }
+            catch (Exception ex) { WebPeeperModule.Logger.Error(ex.Message); }
+            try
+            {
+                var path = Path.Combine(Module.DataFolder, "CefUserData");
+                if (Directory.Exists(path)) Directory.Delete(path, true);
+            }
+            catch (Exception ex) { WebPeeperModule.Logger.Error(ex.Message); }
+            try
+            {
+                var errVersion = _versions[Settings.CefErrorVersion.Value];
+                Settings.CefErrorVersion.Value = CefAvailableVersion.v103;
+                Module.DownloadService.Delete(errVersion);
+            }
+            catch (Exception ex) { WebPeeperModule.Logger.Error(ex.Message); }
+        }
+        void ClearCefCache()
+        {
+            try
+            {
+                Directory.Delete(CefCacheFolder, true);
+            }
+            catch { }
+        }
+        void SetupCefDll()
         {
             void setLibCefDllFolder(object s, EventArgs e)
             {
                 GameService.GameIntegration.Gw2Instance.Gw2Started -= setLibCefDllFolder;
+                if (IsDefaultVersion)
+                {
 #if DEBUG
-                string userFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                string nugetFolder = Path.Combine(userFolder, ".nuget", "packages");
-                string cefFolder = Path.Combine(nugetFolder, "cef.redist.x64\\103.0.9\\CEF");
+                    string userFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    string nugetFolder = Path.Combine(userFolder, ".nuget", "packages");
+                    _cefFolder = Path.Combine(nugetFolder, "cef.redist.x64\\103.0.9\\CEF");
 #else
-                var gw2Folder = Path.GetDirectoryName(GameService.GameIntegration.Gw2Instance.Gw2Process.MainModule.FileName);
-                var cefFolder = Path.Combine(gw2Folder, "bin64\\cef");
-                _cefLocalesPath = cefFolder;
+                    var gw2Folder = Path.GetDirectoryName(GameService.GameIntegration.Gw2Instance.Gw2Process.MainModule.FileName);
+                    _cefFolder = Path.Combine(gw2Folder, "bin64\\cef");
 #endif
+                }
+                else
+                {
+                    _cefFolder = ChangePathTail(_cefFolder, $"{CurrentVersion}");
+                }
                 //Utils.SetDllDirectory(cefFolder); // not working in Wine
-                Environment.SetEnvironmentVariable("PATH", $"{cefFolder};{Environment.GetEnvironmentVariable("PATH")}");
+                Environment.SetEnvironmentVariable("PATH", $"{_cefFolder};{Environment.GetEnvironmentVariable("PATH")}");
+
+                WebPeeperModule.Logger.Debug($"CefService.SetupCefDll: cef {CurrentVersion} path {_cefFolder}");
             }
 
             if (GameService.GameIntegration.Gw2Instance.Gw2IsRunning) setLibCefDllFolder(this, EventArgs.Empty);
             else GameService.GameIntegration.Gw2Instance.Gw2Started += setLibCefDllFolder;
         }
-        void CefSettingInit()
+        void BindEventHandlers()
         {
-            if (Cef.IsInitialized) return;
-            var moduleSettings = WebPeeperModule.Instance.Settings;
-            CefSharpSettings.FocusedNodeChangedEnabled = true;
-            var settings = new CefSettings();
-            settings.EnableAudio();
-            settings.UserAgent = moduleSettings.IsMobileLayout.Value ? _mobileUserAgent : _defaultUserAgent;
-            if (!string.IsNullOrEmpty(_cefLocalesPath)) settings.LocalesDirPath = _cefLocalesPath;
-            settings.BrowserSubprocessPath = Path.Combine(CefSharpDllPath, "CefSharp.BrowserSubprocess.exe");
-            settings.CachePath = Path.Combine(CefSettingFolder, "CefCache");
-            settings.UserDataPath = Path.Combine(CefSettingFolder, "CefUserData");
-            settings.CefCommandLineArgs.Add("gpu-preferences"); // not sure what is it, but gw2 cefhost.exe uses it
-            if (WebPeeperModule.Instance.Settings.IsCleanMode.Value)
-            {
-                ClearDirectory(settings.CachePath);
-                ClearDirectory(settings.UserDataPath);
-            }
-            settings.PersistSessionCookies = true;
-            CefHelper.Default.SetCefSchemeHandler(settings, OnBlishHudSchemeRequested);
-            Cef.Initialize(settings);
+            if (_eventHandlersBound) return;
+            WebPeeperModule.Logger.Debug($"CefService.BindEventHandlers: binding cefHelper event.");
+            _eventHandlersBound = true;
+            SetContextCreatedScript();
+            WebPeeperModule.BlishHudInstance.Exiting += OnBlishHudExiting;
+            Browser.BlishHudSchemeRequested += OnBlishHudSchemeRequested;
+            Browser.FocusedChanged += OnFocusedChanged;
+            Browser.TitleChanged += OnTitleChanged;
         }
-        void ClearDirectory(string path)
+        void SetContextCreatedScript()
         {
-            if (!Directory.Exists(path)) return;
-
-            var dir = new DirectoryInfo(path);
-
-            foreach (FileInfo file in dir.GetFiles())
-            {
-                file.IsReadOnly = false;
-                file.Delete();
-            }
-
-            foreach (DirectoryInfo subDir in dir.GetDirectories())
-            {
-                subDir.Delete(true);
-            }
-        }
-        void LoadOnContextCreatedScript()
-        {
-            using var fileStream = WebPeeperModule.Instance.ContentsManager.GetFileStream("onContextCreated.js") as MemoryStream;
+            using var fileStream = Module.ContentsManager.GetFileStream("onContextCreated.js") as MemoryStream;
             using TextReader reader = new StreamReader(fileStream, Encoding.UTF8);
-            OnContextCreatedScript = reader.ReadToEnd();
+            Browser.ContextCreatedScript = reader.ReadToEnd();
         }
-        void ExtractFiles(string[] paths)
+        void ExtractFiles()
         {
+            WebPeeperModule.Logger.Debug("CefService.ExtractFiles: extracting CefSharp default version.");
+            string[] files = ["CefSharp.dll", "CefSharp.BrowserSubprocess.Core.dll", "CefSharp.BrowserSubprocess.exe", "CefSharp.Core.Runtime.dll"];
+            string[] paths = [.. files.Select(f => Path.Combine(ChangePathTail(_cefSharpBhmPath, $"{DefaultVersion}"), f))];
+            var destinationFolder = ChangePathTail(_cefSharpFolder, $"{DefaultVersion}");
+            Directory.CreateDirectory(destinationFolder);
             foreach (var path in paths)
             {
-                var detinationFile = Path.Combine(CefSharpDllPath, path);
-                Directory.CreateDirectory(Path.GetDirectoryName(detinationFile));
+                var destinationFile = Path.Combine(destinationFolder, Path.GetFileName(path));
                 byte[] file = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(path);
                 try
                 {
-                    using var fileStream = new FileStream(detinationFile, FileMode.Create, FileAccess.Write, FileShare.Write, 4096);
+                    using var fileStream = new FileStream(destinationFile, FileMode.Create, FileAccess.Write, FileShare.Write, 4096);
                     fileStream.Write(file, 0, file.Length);
                 }
                 catch { }
             }
         }
-        void SetupCefSharpDllFolder()
+        void SetupCefSharpDll()
         {
-            // because security policy cannot load "CefSharp.Core.Runtime.dll" from bytes[].
-            AppDomain.CurrentDomain.AssemblyResolve += CefSharpCoreRuntimeResolver;
-            // load CefSharp.dll by self, prevent system load twice. 
-            Assembly.Load(WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes("CefSharp.dll"), []);
-
-            ExtractFiles([
-                "CefSharp.BrowserSubprocess.Core.dll",
-                "CefSharp.BrowserSubprocess.exe",
-                "CefSharp.dll",
-                "_\\CefSharp.Core.Runtime.dll"
-                ]);
-        }
-        private Assembly CefSharpCoreRuntimeResolver(object sender, ResolveEventArgs args)
-        {
-            var target = "CefSharp.Core.Runtime";
-            if (args.Name.Contains(target))
+            _pendingResolveDlls.Add("CefHelper", AssemblyLoadType.Bytes);
+            if (IsDefaultVersion)
             {
-                // load at isolated folder, prevent load CefSharp.dll that is for "CefSharp.BrowserSubprocess.exe"
-                return Assembly.LoadFrom(Path.Combine(CefSharpDllPath, $"_\\{target}.dll"));
+                // will priority load CefSharp.dll in CefSharp.Core.Runtime.dll located folder when load CefSharp.Core.Runtime.dll,
+                // lead to load same dll twice, one is through bytes (cannot identify same file) another through path
+                _pendingResolveDlls.Add("CefSharp", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.OffScreen", AssemblyLoadType.Bytes);
+                _pendingResolveDlls.Add("CefSharp.Core", AssemblyLoadType.Bytes);
+                _pendingResolveDlls.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
+            }
+            else
+            {
+                // doesnt use $PATH probing managed dll
+                _pendingResolveDlls.Add("CefSharp", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.OffScreen", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.Core", AssemblyLoadType.Path);
+                _pendingResolveDlls.Add("CefSharp.Core.Runtime", AssemblyLoadType.Path);
+            }
+            _cefSharpFolder = ChangePathTail(_cefSharpFolder, $"{CurrentVersion}");
+            _cefSharpBhmPath = ChangePathTail(_cefSharpBhmPath, $"{CurrentVersion}");
+            AppDomain.CurrentDomain.AssemblyResolve += CefSharpLibResolver;
+
+            WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} path {_cefSharpFolder}");
+            WebPeeperModule.Logger.Debug($"CefService.SetupCefSharpDll: cefsharp {CurrentVersion} path .bhm\\{_cefSharpBhmPath}");
+        }
+        Assembly CefSharpLibResolver(object sender, ResolveEventArgs args)
+        {
+            var target = new AssemblyName(args.Name).Name;
+            var pending = _pendingResolveDlls.TryGetValue(target, out AssemblyLoadType loadType);
+            if (!pending)
+            {
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: not in pending, skip load");
+                return null;
+            }
+            // Load(byte[]) never reused loaded, so drop loaded
+            // https://learn.microsoft.com/en-us/dotnet/api/system.reflection.assembly.load?view=net-8.0#system-reflection-assembly-load(system-byte())
+            _pendingResolveDlls.Remove(target);
+            target += ".dll";
+            if (loadType == AssemblyLoadType.Bytes)
+            {
+                var filePath = Path.Combine(_cefSharpBhmPath, target);
+                var fileBytes = WebPeeperModule.InstanceModuleManager.DataReader.GetFileBytes(filePath);
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: load .bhm\\{filePath}");
+                return Assembly.Load(fileBytes);
+            }
+            else if (loadType == AssemblyLoadType.Path)
+            {
+                var filePath = Path.Combine(_cefSharpFolder, target);
+                WebPeeperModule.Logger.Debug($"CefService.CefSharpLibResolver: load {filePath}");
+                return Assembly.LoadFrom(filePath);
             }
             return null;
         }
-        public void FocusBlurredElement()
-        {
-            if (_webBrowser is null || !_webBrowser.CanExecuteJavascriptInMainFrame) return;
-            _webBrowser.ExecuteScriptAsync("webPeeper_focusBlurredElement()");
-        }
-        public Task SetBrowserSize(int w, int h)
-        {
-            if (WebBrowser is null) return Task.FromResult(false);
-            return WebBrowser.ResizeAsync(w, h);
-        }
         public Task<Texture2D> GetScreenshot()
         {
-            if (WebBrowser is null) return Task.FromResult<Texture2D>(null);
-            return WebBrowser.CaptureScreenshotAsync().ContinueWith(t =>
+            return Browser.GetScreenshot().ContinueWith(t =>
             {
                 var bufferSize = t.Result.Length;
                 using var ctx = GraphicsService.Graphics.LendGraphicsDeviceContext();
@@ -180,478 +224,129 @@ namespace BhModule.WebPeeper
                 return Texture2D.FromStream(ctx.GraphicsDevice, memoryStream);
             });
         }
-        async public void CloseWebBrowser()
+        async public void Search(string text)
         {
-            await WebPeeperModule.Instance.UIService.BrowserWindow.PrepareQuitBrowser();
-            if (_webBrowser is null) return;
-            _webBrowser.Dispose();
-            _webBrowser = null;
+            using var client = new HttpClient();
+            try
+            {
+                var isValidUrl = Uri.TryCreate(text, UriKind.Absolute, out Uri _);
+                if (!isValidUrl)
+                {
+                    var uriBuilder = new UriBuilder(text);
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    using var response = await client.GetAsync(uriBuilder.Uri, HttpCompletionOption.ResponseHeadersRead, cts.Token); // throw if status error
+                }
+                Browser.LoadUrlAsync(text);
+            }
+            catch
+            {
+                Browser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
+            }
+        }
+        public void ApplyFrameRate()
+        {
+            Browser.SetFrameRate(Settings.GetFrameRate());
         }
         public void ApplyUserAgent()
         {
-            if (_webBrowser is null) return;
-            using var devToolsClient = _webBrowser.GetDevToolsClient();
-            var agentString = WebPeeperModule.Instance.Settings.IsMobileLayout.Value ? _mobileUserAgent : _defaultUserAgent;
-            devToolsClient.Emulation.SetUserAgentOverrideAsync(agentString);
+            Browser.SetMobileUserAgent(Settings.IsMobileLayout.Value);
         }
         void OnBlishHudExiting(object sender, EventArgs e)
         {
-            _webBrowser?.Dispose(); // make sure close for restart
-            _webBrowser = null;
+            Browser.Dispose(); // make sure close for restart
         }
-        (Stream, string) OnBlishHudSchemeRequested(IRequest request)
+        Stream OnBlishHudSchemeRequested(string filePath)
         {
-            var uri = new Uri(request.Url);
-            var filePath = uri.AbsolutePath.Remove(0, 1);
-            var stream = WebPeeperModule.Instance.ContentsManager.GetFileStream(filePath);
-            return (stream, Cef.GetMimeType(Path.GetExtension(filePath)));
+            return Module.ContentsManager.GetFileStream(filePath); // cef auto dispose stream
         }
-        void OnContextCreated(IFrame frame)
+        void OnFocusedChanged(bool focused)
         {
-            frame.ExecuteJavaScriptAsync(OnContextCreatedScript);
-        }
-        void OnFocusedNodeChanged(IDomNode node)
-        {
+            WebPeeperModule.Logger.Debug($"CefService.OnFocusedChanged: focused={focused}");
             WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
             {
-                if (node is null) { _inputMethod.Disable(); return; }
-                bool isContenteditable = node["contenteditable"] is not null && node["contenteditable"] != "false";
-                if (isContenteditable || node.TagName == "INPUT" || node.TagName == "TEXTAREA")
-                {
-                    _inputMethod.Enable();
-                }
-                else _inputMethod.Disable();
+                if (focused) Module.ImeService.Enable();
+                else Module.ImeService.Disable();
             });
         }
-        void OnMainFrameChanged()
+        void OnTitleChanged(string title)
         {
-            WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() => _inputMethod.Disable());
-        }
-        void OnTitleChanged(object sender, TitleChangedEventArgs e)
-        {
-            var uiService = WebPeeperModule.Instance.UIService;
+            var uiService = Module.UiService;
             if (uiService is null || uiService.BrowserWindow is null) return;
-            uiService.BrowserWindow.Subtitle = e.Title;
+            uiService.BrowserWindow.Subtitle = title;
         }
-        void OnFrameLoadStart(object sender, FrameLoadStartEventArgs e)
+        string ChangePathTail(string path, string directoryName)
         {
-            WebPainter.Instance?.SetErrorState(false);
+            return Path.Combine(Path.GetDirectoryName(path) ?? "", directoryName);
         }
-        public void OnUrlLoadError(object sender, LoadErrorEventArgs e)
+        void SetupLib()
         {
-            NavigationBar.Instance?.SetAddressInputText(e.FailedUrl);
-            var text = LastAddressInputText;
-            LastAddressInputText = "";
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                if (Uri.TryCreate(text, UriKind.Absolute, out Uri _))
-                {
-                    WebPainter.Instance?.SetErrorState(true);
-                }
-                else
-                {
-                    _webBrowser.LoadUrlAsync(new Regex("{\\s*text\\s*}").Replace(WebPeeperModule.Instance.Settings.SearchUrl.Value, Uri.EscapeDataString(text)));
-                }
-            }
+            if (LibLoadStarted) return;
+            WebPeeperModule.Logger.Debug("CefService.SetupLib");
+            LibLoadStarted = true;
+            CefVersionSettingView.UpdateView?.Invoke();
+            LibLoadStart?.Invoke(this, EventArgs.Empty);
+
+            if (Settings.IsCleanMode.Value) ClearCefCache();
+            SetupCefDll();
+            SetupCefSharpDll();
         }
-        void OnFullscreenModeChange(bool isFullscreen)
+        Task CreateWebBrowser()
         {
-            if (isFullscreen) NavigationBar.Instance?.Hide();
-            else NavigationBar.Instance?.Show();
-        }
-        public Task<bool> CreateWebBrowser()
-        {
-            CefSettingInit();
             var tcs = new TaskCompletionSource<bool>();
-            if (_webBrowser == null || _webBrowser.IsDisposed)
+            try
             {
-                var browserSetting = new BrowserSettings(true);
-                if (WebPeeperModule.Instance.Settings.IsFollowBhFps.Value)
-                {
-                    browserSetting.WindowlessFrameRate = GameService.Graphics.FrameLimiter switch
-                    {
-                        FramerateMethod.LockedTo30Fps => 30,
-                        FramerateMethod.LockedTo60Fps => 60,
-                        _ => 60,
-                    };
-                }
-                _webBrowser = new ChromiumWebBrowser(WebPeeperModule.Instance.Settings.HomeUrl.Value, browserSetting);
-                _webBrowser.TitleChanged += OnTitleChanged;
-                _webBrowser.FrameLoadStart += OnFrameLoadStart;
-                _webBrowser.LoadError += OnUrlLoadError;
-                // _webBrowser.ConsoleMessage += (sender, e) =>
-                // {
-                //     Trace.WriteLine("CONSOLE: " + e.Message);
-                // };
-                _webBrowser.BrowserInitialized += delegate { tcs.TrySetResult(true); };
-                // CefHelper.dll that prevent system load CefSharp.dll before create browser. 
-                CefHelper.Default.SetBrowserHandlers(
-                    _webBrowser,
-                    OnContextCreated,
-                    OnFocusedNodeChanged,
-                    OnMainFrameChanged,
-                    OnFullscreenModeChange
+                Browser.CefSettingInit(
+                    IsDefaultVersion ? _cefFolder : Path.Combine(_cefFolder, "locales"),
+                    CefCacheFolder,
+                    _cefSharpFolder
                     );
+                Browser.Create(Settings.HomeUrl.Value, Settings.GetFrameRate(), Settings.IsMobileLayout.Value)
+                    .ContinueWith(t =>
+                    {
+                        if (t.Status == TaskStatus.RanToCompletion) tcs.TrySetResult(true);
+                        else
+                        {
+                            WebPeeperModule.Logger.Error(t.Exception?.Message);
+                            tcs.TrySetException(t.Exception);
+                        }
+                    });
+                Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(t => tcs.TrySetCanceled());
             }
-            if (_webBrowser.IsBrowserInitialized) tcs.TrySetResult(true);
+            catch (Exception ex)
+            {
+                WebPeeperModule.Logger.Error(ex.Message);
+                Settings.RedownloadCef();
+                tcs.TrySetException(ex);
+            }
             return tcs.Task;
         }
-
+        async public void CloseWebBrowser()
+        {
+            var window = Module.UiService?.BrowserWindow;
+            if (window is not null) await window.PrepareQuitBrowser();
+            Browser.Close();
+        }
+        public Task StartBrowsing()
+        {
+            WebPeeperModule.Logger.Debug("CefService.StartBrowsing");
+            return Task.Run(async () =>
+             {
+                 SetupLib();
+                 BindEventHandlers();
+                 await CreateWebBrowser();
+             });
+        }
     }
-    // https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.nativewindow?view=windowsdesktop-10.0
-    // https://github.com/cefsharp/CefSharp/blob/v143.0.90/CefSharp.Wpf/Internals/IMEHandler.cs
-    public class InputMethod : NativeWindow
+    enum AssemblyLoadType
     {
-        IntPtr WinHandle { get => WebPeeperModule.BlishHudInstance.FormHandle; }
-        IntPtr _himc;
-        Message _m;
-        object _keyStateChangedCloned;
-        object _keyReleasedCloned;
-        object _keyPressedCloned;
-        bool _mouseLeftPressed = false;
-        Action _mouseLeftReleaseCallback;
-        readonly Dictionary<string, (Action<object>, Func<object>)> _keybindsBackupMap = [];
-        ChromiumWebBrowser Browser { get => WebPeeperModule.Instance.CefService.WebBrowser; }
-        public InputMethod()
-        {
-            AssignHandle(WinHandle);
-            WebPeeperModule.BlishHudInstance.Form.LostFocus += OnHudLostFocus;
-            GameService.Input.Mouse.LeftMouseButtonPressed += OnLeftMouseButtonPressed;
-            GameService.Input.Mouse.LeftMouseButtonReleased += OnLeftMouseButtonReleased;
-            _keybindsBackupMap.Add("KeyStateChanged", (v => { _keyStateChangedCloned = v; }, () => _keyStateChangedCloned));
-            _keybindsBackupMap.Add("KeyReleased", (v => { _keyReleasedCloned = v; }, () => _keyReleasedCloned));
-            _keybindsBackupMap.Add("KeyPressed", (v => { _keyPressedCloned = v; }, () => _keyPressedCloned));
-        }
-        public void Dispose()
-        {
-            ReleaseHandle();
-            WebPeeperModule.BlishHudInstance.Form.LostFocus -= OnHudLostFocus;
-            GameService.Input.Mouse.LeftMouseButtonPressed -= OnLeftMouseButtonPressed;
-            GameService.Input.Mouse.LeftMouseButtonReleased -= OnLeftMouseButtonReleased;
-        }
-        protected override void WndProc(ref Message m)
-        {
-            if (Browser is not null)
-            {
-                _m = m;
-                switch ((WM)m.Msg)
-                {
-                    case WM.KEYUP:
-                    case WM.KEYDOWN:
-                    case WM.CHAR:
-                        SendKey();
-                        break;
-                    case WM.IME_COMPOSITION:
-                        SetCefComposition();
-                        return;
-                    case WM.IME_ENDCOMPOSITION:
-                        Browser?.GetBrowserHost().ImeSetComposition("", [], new(int.MaxValue, int.MaxValue), new(0, 0));
-                        Browser?.GetBrowserHost().ImeFinishComposingText(false);
-                        return;
-                    case WM.IME_STARTCOMPOSITION:
-                        return;
-                }
-                _m = new();
-            }
-            base.WndProc(ref m);
-        }
-        bool LParmHasFlag(object flag)
-        {
-            var _flag = (int)flag;
-            return (_m.LParam.ToInt64() & _flag) == _flag;
-        }
-        void OnLeftMouseButtonPressed(object sender, Blish_HUD.Input.MouseEventArgs e)
-        {
-            _mouseLeftPressed = true;
-        }
-        void OnLeftMouseButtonReleased(object sender, Blish_HUD.Input.MouseEventArgs e)
-        {
-            _mouseLeftPressed = false;
-            _mouseLeftReleaseCallback?.Invoke();
-            _mouseLeftReleaseCallback = null;
-        }
-        void OnHudLostFocus(object sender, EventArgs e)
-        {
-            if (Browser is null || !Browser.CanExecuteJavascriptInMainFrame) return;
-            Browser.ExecuteScriptAsync("webPeeper_blur()");
-        }
-        void SendKey()
-        {
-            // Browser.GetBrowserHost().SendKeyEvent(_m.Msg, _m.WParam.CastToInt32(), _m.LParam.CastToInt32()); 
-            // port from CefBrowserHostWrapper::SendKeyEvent , due to above throw System.InvalidProgramException: Invalid IL code in wine
-            var wParam = _m.WParam.CastToInt32();
-            var lParam = _m.LParam.CastToInt32();
-            var evt = new KeyEvent()
-            {
-                Modifiers = GetCefKeyboardModifiers(wParam, lParam),
-                WindowsKeyCode = wParam,
-                NativeKeyCode = lParam,
-                IsSystemKey = false,
-                Type = (WM)_m.Msg switch
-                {
-                    WM.KEYDOWN => KeyEventType.KeyDown,
-                    WM.KEYUP => KeyEventType.KeyUp,
-                    WM.CHAR => KeyEventType.Char,
-                    _ => (KeyEventType)(-1),
-                }
-            };
-            Browser?.GetBrowserHost().SendKeyEvent(evt);
-        }
-        static bool IsKeyDown(VK wparam)
-        {
-            return (Utils.GetKeyState(wparam) & 0x8000) != 0;
-        }
-        static CefEventFlags GetCefKeyboardModifiers(int wParam, int lParam)
-        {
-            CefEventFlags modifiers = 0;
-            if (IsKeyDown(VK.SHIFT)) modifiers |= CefEventFlags.ShiftDown;
-            if (IsKeyDown(VK.CONTROL)) modifiers |= CefEventFlags.ControlDown;
-            if (IsKeyDown(VK.MENU)) modifiers |= CefEventFlags.AltDown;
-
-            if ((Utils.GetKeyState(VK.NUMLOCK) & 1) != 0) modifiers |= CefEventFlags.NumLockOn;
-            if ((Utils.GetKeyState(VK.CAPITAL) & 1) != 0) modifiers |= CefEventFlags.CapsLockOn;
-
-            switch ((VK)wParam)
-            {
-                case VK.RETURN:
-                    // KF_EXTENDED = 0x0100
-                    if (((lParam >> 16) & 0x0100) != 0) modifiers |= CefEventFlags.IsKeyPad;
-                    break;
-                case VK.INSERT:
-                case VK.DELETE:
-                case VK.HOME:
-                case VK.END:
-                case VK.PRIOR:
-                case VK.NEXT:
-                case VK.UP:
-                case VK.DOWN:
-                case VK.LEFT:
-                case VK.RIGHT:
-                    if (((lParam >> 16) & 0x0100) == 0) modifiers |= CefEventFlags.IsKeyPad;
-                    break;
-                case VK.NUMLOCK:
-                case VK.NUMPAD0:
-                case VK.NUMPAD1:
-                case VK.NUMPAD2:
-                case VK.NUMPAD3:
-                case VK.NUMPAD4:
-                case VK.NUMPAD5:
-                case VK.NUMPAD6:
-                case VK.NUMPAD7:
-                case VK.NUMPAD8:
-                case VK.NUMPAD9:
-                case VK.DIVIDE:
-                case VK.MULTIPLY:
-                case VK.SUBTRACT:
-                case VK.ADD:
-                case VK.DECIMAL:
-                case VK.CLEAR:
-                    modifiers |= CefEventFlags.IsKeyPad;
-                    break;
-                case VK.SHIFT:
-                    if (IsKeyDown(VK.LSHIFT)) modifiers |= CefEventFlags.IsLeft;
-                    else if (IsKeyDown(VK.RSHIFT)) modifiers |= CefEventFlags.IsRight;
-                    break;
-                case VK.CONTROL:
-                    if (IsKeyDown(VK.LCONTROL)) modifiers |= CefEventFlags.IsLeft;
-                    else if (IsKeyDown(VK.RCONTROL)) modifiers |= CefEventFlags.IsRight;
-                    break;
-                case VK.MENU:
-                    if (IsKeyDown(VK.LMENU)) modifiers |= CefEventFlags.IsLeft;
-                    else if (IsKeyDown(VK.RMENU)) modifiers |= CefEventFlags.IsRight;
-                    break;
-                case VK.LWIN:
-                    modifiers |= CefEventFlags.IsLeft;
-                    break;
-                case VK.RWIN:
-                    modifiers |= CefEventFlags.IsRight;
-                    break;
-            }
-            return modifiers;
-        }
-        void SetCefComposition()
-        {
-            var bHost = Browser?.GetBrowserHost();
-            if (bHost is null) return;
-            if (GetCompositionText(GCS.RESULTSTR, out string text))
-            {
-                bHost.ImeCommitText(text, new(int.MaxValue, int.MaxValue), 0);
-                bHost.ImeSetComposition(text, [], new(int.MaxValue, int.MaxValue), new(0, 0));
-                bHost.ImeFinishComposingText(false);
-            }
-            else if (GetCompositionText(GCS.COMPSTR, out text))
-            {
-                GetCompositionSelection(text, out List<CompositionUnderline> attrs, out int caret);
-                bHost.ImeSetComposition(text, [.. attrs], new(int.MaxValue, int.MaxValue), new(caret, caret));
-            }
-        }
-        bool GetCompositionText(GCS gcs, out string text)
-        {
-            var textLen = Utils.ImmGetCompositionStringW(_himc, (int)gcs, null, 0);
-            if (textLen <= 0)
-            {
-                text = string.Empty;
-                return false;
-            }
-            byte[] buffer = new byte[textLen];
-            Utils.ImmGetCompositionStringW(_himc, (int)gcs, buffer, textLen);
-            text = Encoding.Unicode.GetString(buffer);
-            return true;
-        }
-        public void SetCompositionPostion()
-        {
-            if (Browser is null || WebPainter.Instance is null) return;
-            var x = WebPainter.Instance.LocationAtForm.X;
-            var y = WebPainter.Instance.LocationAtForm.Y;
-
-            Browser.EvaluateScriptAsync("webPeeper_getFocusLocation()").ContinueWith(t =>
-            {
-                var inputXY = (List<object>)t.Result.Result;
-                var inputX = (int)inputXY[0] + 2;
-                var inputY = (int)inputXY[1];
-                var offsetX = (int)(inputX * GameService.Graphics.UIScaleMultiplier);
-                var offsetY = (int)(inputY * GameService.Graphics.UIScaleMultiplier);
-                WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
-                {
-                    // CFS_POINT = 0x0002
-                    Utils.ImmSetCompositionWindow(_himc, new CompositionForm() { Style = 0x0002, X = x + offsetX, Y = y + offsetY });
-                });
-            });
-        }
-        void GetCompositionSelection(string text, out List<CompositionUnderline> underlines, out int caretPosition)
-        {
-            byte[] attributes;
-            int selectionStart = text.Length;
-            int selectionEnd = text.Length;
-            caretPosition = 0;
-            underlines = [];
-
-            if (LParmHasFlag(GCS.COMPATTR))
-            {
-                var attributeSize = Utils.ImmGetCompositionStringW(_himc, (int)GCS.COMPATTR, null, 0);
-                if (attributeSize > 0)
-                {
-                    attributes = new byte[attributeSize];
-                    Utils.ImmGetCompositionStringW(_himc, (int)GCS.COMPATTR, attributes, attributeSize);
-                    for (selectionStart = 0; selectionStart < attributeSize; ++selectionStart)
-                    {
-                        // ATTR_TARGET_CONVERTED 0x01, ATTR_TARGET_NOTCONVERTED 0x03
-                        if (attributes[selectionStart] == 0x01 || attributes[selectionStart] == 0x03)
-                        {
-                            break;
-                        }
-                    }
-                    for (selectionEnd = selectionStart; selectionEnd < attributeSize; ++selectionEnd)
-                    {
-                        if (attributes[selectionStart] != 0x01 && attributes[selectionStart] != 0x03)
-                        {
-                            break;
-                        }
-                    }
-                }
-            }
-            // CS_NOMOVECARET 0x4000
-            if (!LParmHasFlag(0x4000) && LParmHasFlag(GCS.CURSORPOS))
-            {
-                caretPosition = Utils.ImmGetCompositionStringW(_himc, (int)GCS.CURSORPOS, null, 0);
-            }
-
-            if (LParmHasFlag(GCS.COMPCLAUSE))
-            {
-                var clauseSize = Utils.ImmGetCompositionStringW(_himc, (int)GCS.COMPCLAUSE, null, 0);
-                int clauseLength = (int)clauseSize / sizeof(Int32);
-                var clauseData = new byte[clauseSize];
-                Utils.ImmGetCompositionStringW(_himc, (int)GCS.COMPCLAUSE, clauseData, clauseSize);
-                for (int i = 0; i < clauseLength - 1; i++)
-                {
-                    int from = BitConverter.ToInt32(clauseData, i * sizeof(Int32));
-                    int to = BitConverter.ToInt32(clauseData, (i + 1) * sizeof(Int32));
-
-                    var range = new Range(from, to);
-                    bool thick = (range.From >= selectionStart && range.To <= selectionEnd);
-                    underlines.Add(new(range, 0xFF000000, 0x00000000, thick));
-                }
-            }
-
-            if (underlines.Count == 0)
-            {
-                var range = new Range();
-                bool thick = false;
-                if (selectionStart > 0)
-                {
-                    range = new Range(0, selectionStart);
-                }
-                if (selectionEnd > selectionStart)
-                {
-                    range = new Range(selectionStart, selectionEnd);
-                    thick = true;
-                }
-                if (selectionEnd < text.Length)
-                {
-                    range = new Range(selectionEnd, text.Length);
-                }
-                underlines.Add(new(range, 0xFF000000, 0x00000000, thick));
-            }
-        }
-        void DisableAllKeybinds()
-        {
-            foreach (var item in _keybindsBackupMap)
-            {
-                var key = item.Key;
-                var (setter, getter) = item.Value;
-                if (getter() is not null) continue;
-                // reflection
-                var evtHandlerField = typeof(Blish_HUD.Input.KeyboardHandler).GetField(key, BindingFlags.Instance | BindingFlags.NonPublic);
-                object evtHandler = evtHandlerField.GetValue(GameService.Input.Keyboard);
-                if (evtHandler is EventHandler<KeyboardEventArgs> evtHandlerKnownType)
-                {
-                    setter(evtHandlerKnownType?.Clone());
-                    evtHandlerField.SetValue(GameService.Input.Keyboard, null);
-                }
-            }
-        }
-        void RestoreAllKeybinds()
-        {
-            foreach (var item in _keybindsBackupMap)
-            {
-                var key = item.Key;
-                var (setter, getter) = item.Value;
-                var cloned = getter();
-                if (cloned is null) return;
-                // reflection
-                var evtHandlerField = typeof(Blish_HUD.Input.KeyboardHandler).GetField(key, BindingFlags.Instance | BindingFlags.NonPublic);
-                evtHandlerField.SetValue(GameService.Input.Keyboard, cloned);
-                setter(null);
-            }
-        }
-        public void Enable()
-        {
-            if (_mouseLeftPressed) { _mouseLeftReleaseCallback = Enable; return; }
-            if (_himc != IntPtr.Zero) Disable(false);
-            if (WebPeeperModule.Instance.Settings.IsBlockKeybinds.Value) DisableAllKeybinds();
-            Utils.SetForegroundWindow(WinHandle);
-            if (!WebPeeperModule.BlishHudInstance.Form.Focused)
-            {
-                GameService.GameIntegration.Gw2Instance.FocusGw2();
-                Utils.SetForegroundWindow(WinHandle);
-            }
-            // IACE_DEFAULT = 0x0010
-            Utils.ImmAssociateContextEx(WinHandle, 0x0, 0x0010);
-            _himc = Utils.ImmGetContext(WinHandle);
-            Utils.ImmSetOpenStatus(_himc, true);
-            SetCompositionPostion();
-        }
-        public void Disable(bool tryFocusGame = true)
-        {
-            if (_himc == IntPtr.Zero) return;
-            RestoreAllKeybinds();
-            Utils.ImmSetOpenStatus(_himc, false);
-            Utils.ImmReleaseContext(WinHandle, _himc);
-            _himc = IntPtr.Zero;
-            if (tryFocusGame && WebPeeperModule.BlishHudInstance.Form.Focused)
-            {
-                GameService.GameIntegration.Gw2Instance.FocusGw2();
-            }
-        }
+        Bytes,
+        Path
+    }
+    public enum CefAvailableVersion
+    {
+        [Description(" 103.0.90")]
+        v103,
+        [Description(" 144.0.120")]
+        v144
     }
 }

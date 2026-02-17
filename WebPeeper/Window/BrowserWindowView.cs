@@ -2,56 +2,99 @@
 using Blish_HUD;
 using Blish_HUD.Controls;
 using Blish_HUD.Graphics.UI;
-using CefSharp;
-using CefSharp.OffScreen;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace BhModule.WebPeeper
 {
-    public class BrowserWindowView : View
+    internal class BrowserWindowView : View
     {
         Container _window;
-        WindowContent _windowContent;
+        Control _windowContent;
         protected override void Build(Container window)
         {
-            try
+            _window = window;
+            _window.ContentResized += OnWindowResize;
+            if (CefService.Outdated)
             {
-                _window = window;
-                var createTask = WebPeeperModule.Instance.CefService.CreateWebBrowser();
-                var done = createTask.Wait(TimeSpan.FromSeconds(30));
-                if (!done) return;
-                // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
-                WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
-                {
-                    _windowContent = new WindowContent(_window.ContentRegion.Size)
-                    {
-                        Parent = window
-                    };
-                    _window.Resized += OnWindowResize;
-                });
+                ShowOutdatedWarning();
             }
-            catch (Exception ex)
-            {
-                WebPeeperModule.Logger.Error(ex.Message);
-            }
+            else ShowDownloadProgress();
         }
-        void OnWindowResize(object sender, ResizedEventArgs evt)
+        void OnWindowResize(object sender, RegionChangedEventArgs evt)
         {
-            _windowContent.Size = _window.ContentRegion.Size;
+            if (_windowContent is null) return;
+            _windowContent.Size = evt.CurrentRegion.Size;
         }
         protected override void Unload()
         {
-            _window.Resized -= OnWindowResize;
+            _window.ContentResized -= OnWindowResize;
             _windowContent?.Dispose();
         }
+        void ShowOutdatedWarning()
+        {
+            if (Warning.IsAccepted) ShowDownloadProgress();
+            else
+            {
+                _ = WebPeeperModule.Instance.DownloadService.Download(CefService.CurrentVersion);
+                var warning = new Warning()
+                {
+                    Parent = _window,
+                    Size = _window.ContentRegion.Size
+                };
+                warning.Accepted += (s, e) => { ShowDownloadProgress(); };
+                _windowContent = warning;
+            }
+        }
+        void ShowDownloadProgress()
+        {
+            var downloadService = WebPeeperModule.Instance.DownloadService;
+            var downloaded = downloadService.CheckCefLib(CefService.CurrentVersion); // cant get correct Downloading state, due to async Download so check here
+            if (!downloaded) _ = downloadService.Download(CefService.CurrentVersion);
+            if (downloadService.Downloading || !downloaded)
+            {
+                var bar = new ProgressBar(() => downloadService.ProgressPercentage)
+                {
+                    Text = "Downloading CEF...",
+                    Parent = _window,
+                    Size = _window.ContentRegion.Size,
+                    BarSize = new(150, 30)
+                };
+                bar.ProgressUpdated += (s, e) =>
+                {
+                    if (e.NewValue >= 1 && _window.Visible) ShowBrowser();
+                };
+                _windowContent = bar;
+            }
+            else ShowBrowser();
+        }
+        void ShowBrowser()
+        {
+            _windowContent?.Dispose();
+            _windowContent = new WaitingCefSetup()
+            {
+                Parent = _window,
+                Size = _window.ContentRegion.Size,
+            };
+            WebPeeperModule.Instance.CefService.StartBrowsing().ContinueWith(t =>
+            {
+                // bring to same thread , because sometime Tween Initialize lerperSet before lerperSet add
+                WebPeeperModule.BlishHudInstance.Form.SafeInvoke(() =>
+                {
+                    _windowContent?.Dispose();
+                    _windowContent = new WindowContent(_window.ContentRegion.Size)
+                    {
+                        Parent = _window
+                    };
+                });
+            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+        }
     }
-    public class NavigationBar : FlowPanel
+    internal class NavigationBar : FlowPanel
     {
-        static public NavigationBar Instance;
         static readonly Texture2D _btnTexture = GameService.Content.GetTexture("784268");
         static readonly Texture2D _bookmarkBtnTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("bookmark.png");
         IconButton _backBtn;
@@ -60,43 +103,31 @@ namespace BhModule.WebPeeper
         LoadingSpinner _loading;
 
         public event EventHandler<EventArgs> BookmarkBtnClicked;
-        ChromiumWebBrowser WebBrowser => WebPeeperModule.Instance.CefService.WebBrowser;
         public NavigationBar()
         {
-            Instance = this;
             Height = 30;
             SetChildren();
-            if (WebBrowser is null) return;
-            if (WebBrowser.CanExecuteJavascriptInMainFrame)
-            {
-                WebBrowser.EvaluateScriptAsync("document.fullscreen").ContinueWith(t =>
-                {
-                    Visible = !(bool)t.Result.Result;
-                });
-            }
-            WebBrowser.LoadingStateChanged += HandleLoading;
-            WebBrowser.AddressChanged += HandleAddress;
-        }
-        public void SetAddressInputText(string text)
-        {
-            if (_addressInput is null) return;
-            _addressInput.Text = text;
+            Browser.GetFullscreenState().ContinueWith(t => { Visible = !t.Result; });
+            Browser.LoadingStateChanged += HandleLoading;
+            Browser.AddressChanged += HandleAddress;
+            Browser.UrlLoadError += HandleAddress;
+            Browser.FullscreenModeChanged += HandleFullscreen;
         }
         void SetChildren()
         {
             _backBtn = new IconButton(_btnTexture, Height, 2)
             {
                 Parent = this,
-                Visible = WebBrowser?.CanGoBack ?? false
+                Visible = Browser.CanGoBack
             };
-            _backBtn.Click += delegate { WebBrowser?.Back(); };
+            _backBtn.Click += delegate { Browser.Back(); };
             _fowardBtn = new IconButton(_btnTexture, Height, 2)
             {
                 Parent = this,
-                Visible = WebBrowser?.CanGoForward ?? false,
+                Visible = Browser.CanGoForward,
                 IconRotation = MathHelper.ToRadians(180f)
             };
-            _fowardBtn.Click += delegate { WebBrowser?.Forward(); };
+            _fowardBtn.Click += delegate { Browser.Forward(); };
 
             var bookmarkBtn = new IconButton(_bookmarkBtnTexture, Height, 2) { Parent = this };
             bookmarkBtn.Click += delegate
@@ -110,42 +141,34 @@ namespace BhModule.WebPeeper
                 Height = Height,
                 Parent = this
             };
+            _addressInput.InputFocusChanged += (s, e) =>
+            {
+                if (!e.Value) return;
+                // WindowsClipboardService cant read cef copied
+                var text = System.Windows.Forms.Clipboard.GetText();
+                ClipboardUtil.WindowsClipboardService.SetTextAsync(text);
+            };
             _addressInput.EnterPressed += delegate
             {
                 if (string.IsNullOrWhiteSpace(_addressInput.Text))
                 {
-                    _addressInput.Text = WebBrowser?.Address ?? "";
+                    _addressInput.Text = Browser.Address;
                     return;
                 }
-                HandleLoading(this, new(null, true, false, true));
-                WebPeeperModule.Instance.CefService.LastAddressInputText = _addressInput.Text;
-                var cts = new CancellationTokenSource();
-                void stopManuallyErrTrigger(object sender, LoadingStateChangedEventArgs e)
-                {
-                    WebBrowser.LoadingStateChanged -= stopManuallyErrTrigger;
-                    cts.Cancel();
-                }
-                if (WebBrowser is not null) WebBrowser.LoadingStateChanged += stopManuallyErrTrigger;
-                WebBrowser?.LoadUrlAsync(WebPeeperModule.Instance.CefService.LastAddressInputText);
-                Task.Delay(1000, cts.Token).ContinueWith(t =>
-                {
-                    if (WebBrowser is not null) WebBrowser.LoadingStateChanged -= stopManuallyErrTrigger;
-                    if (t.IsCanceled || t.IsFaulted) return;
-                    HandleLoading(this, new(null, true, false, false));
-                    WebPeeperModule.Instance.CefService.OnUrlLoadError(this, new(null, null, CefErrorCode.InvalidUrl, "", _addressInput.Text));
-                });
+                HandleLoading(true, false, true); // err url lead to hide loading too quick, so show it early
+                WebPeeperModule.Instance.CefService.Search(_addressInput.Text);
             };
             _addressInput.InputFocusChanged += (sender, e) =>
             {
                 _addressInput.SelectionStart = !e.Value ? _addressInput.Text.Length : 0;
                 _addressInput.SelectionEnd = _addressInput.Text.Length;
-                if (!e.Value && _addressInput.Text.Length == 0) _addressInput.Text = WebBrowser?.Address ?? "";
+                if (!e.Value && _addressInput.Text.Length == 0) _addressInput.Text = Browser.Address;
             };
-            _addressInput.Text = WebBrowser?.Address ?? "";
+            _addressInput.Text = Browser.Address;
 
             _loading = new LoadingSpinner()
             {
-                Visible = WebBrowser?.IsLoading ?? false,
+                Visible = Browser.IsLoading,
                 Enabled = false,
                 Parent = this,
                 Size = new(_addressInput.Height, _addressInput.Height)
@@ -156,16 +179,16 @@ namespace BhModule.WebPeeper
             base.RecalculateLayout();
             RecalculatetLoadingLocation();
         }
-        void HandleLoading(object sender, LoadingStateChangedEventArgs e)
+        void HandleLoading(bool canGoBack, bool canGoForward, bool isLoading)
         {
-            if (_fowardBtn.Visible != e.CanGoForward || _backBtn.Visible != e.CanGoBack)
+            if (_fowardBtn.Visible != canGoForward || _backBtn.Visible != canGoBack)
             {
-                _backBtn.Visible = e.CanGoBack;
-                _fowardBtn.Visible = e.CanGoForward;
+                _backBtn.Visible = canGoBack;
+                _fowardBtn.Visible = canGoForward;
                 RecalculateLayout();
                 RecalculateAddressInputWidth();
             }
-            _loading.Visible = e.IsLoading;
+            _loading.Visible = isLoading;
             RecalculatetLoadingLocation();
         }
         void RecalculatetLoadingLocation()
@@ -173,9 +196,14 @@ namespace BhModule.WebPeeper
             if (_loading is null) return;
             _loading.Location = new Point(Width - _loading.Width, 0);
         }
-        void HandleAddress(object sender, AddressChangedEventArgs e)
+        void HandleFullscreen(bool isFullscreen)
         {
-            _addressInput.Text = e.Address;
+            if (isFullscreen) Hide();
+            else Show();
+        }
+        void HandleAddress(string address)
+        {
+            _addressInput.Text = address;
         }
         void RecalculateAddressInputWidth()
         {
@@ -196,15 +224,16 @@ namespace BhModule.WebPeeper
         }
         protected override void DisposeControl()
         {
-            if (WebBrowser is not null)
-            {
-                WebBrowser.LoadingStateChanged -= HandleLoading;
-                WebBrowser.AddressChanged -= HandleAddress;
-            }
+
+            Browser.LoadingStateChanged -= HandleLoading;
+            Browser.AddressChanged -= HandleAddress;
+            Browser.UrlLoadError -= HandleAddress;
+            Browser.FullscreenModeChanged -= HandleFullscreen;
+
             BookmarkBtnClicked = null;
         }
     }
-    public class WindowContent : Panel
+    internal class WindowContent : Panel
     {
         readonly NavigationBar _navigationBar;
         Control _mainContent;
@@ -239,9 +268,10 @@ namespace BhModule.WebPeeper
         }
         void CreateMainContent()
         {
-            if (Warning.Accepted) _mainContent = new WebPainter();
-            else _mainContent = new Warning(() => { CreateMainContent(); ResetMainContentRect(); });
-            _mainContent.Parent = this;
+            _mainContent = new WebPainter
+            {
+                Parent = this
+            };
             _mainContent.Click += delegate
             {
                 if (!_bookmarkPanel.Visible) return;
@@ -279,6 +309,13 @@ namespace BhModule.WebPeeper
         void OnNavigationBarVisibleChanged(object sender, EventArgs e)
         {
             ResetMainContentRect();
+        }
+    }
+    internal class WaitingCefSetup : Control
+    {
+        protected override void Paint(SpriteBatch spriteBatch, Rectangle bounds)
+        {
+            LoadingSpinnerUtil.DrawLoadingSpinner(this, spriteBatch, new Rectangle(Size.X / 2 - 50, Size.Y / 2 - 50, 100, 100));
         }
     }
 }

@@ -14,20 +14,23 @@ namespace BhModule.WebPeeper
     [Export(typeof(Blish_HUD.Modules.Module))]
     public class WebPeeperModule : Blish_HUD.Modules.Module
     {
-        public static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
+        internal static readonly Logger Logger = Logger.GetLogger<WebPeeperModule>();
         #region Service Managers
-        internal SettingsManager SettingsManager => this.ModuleParameters.SettingsManager;
-        internal ContentsManager ContentsManager => this.ModuleParameters.ContentsManager;
-        internal DirectoriesManager DirectoriesManager => this.ModuleParameters.DirectoriesManager;
-        internal Gw2ApiManager Gw2ApiManager => this.ModuleParameters.Gw2ApiManager;
+        internal SettingsManager SettingsManager => ModuleParameters.SettingsManager;
+        internal ContentsManager ContentsManager => ModuleParameters.ContentsManager;
+        internal DirectoriesManager DirectoriesManager => ModuleParameters.DirectoriesManager;
+        internal Gw2ApiManager Gw2ApiManager => ModuleParameters.Gw2ApiManager;
+        internal string DataFolder => DirectoriesManager.GetFullDirectoryPath(Name.ToLower());
         #endregion
-        public CefService CefService { get; private set; }
-        public UIService UIService { get; private set; }
-        public ModuleSettings Settings { get; private set; }
-        public static BlishHud BlishHudInstance;
-        public static MenuItem InstanceSettingsMenuItem;
-        public static ModuleManager InstanceModuleManager;
-        public static WebPeeperModule Instance;
+        internal CefService CefService { get; private set; }
+        internal ImeService ImeService { get; private set; }
+        internal UiService UiService { get; private set; }
+        internal DownloadService DownloadService { get; private set; }
+        internal ModuleSettings Settings { get; private set; }
+        internal static BlishHud BlishHudInstance { get; private set; }
+        internal static MenuItem InstanceSettingsMenuItem { get; private set; }
+        internal static ModuleManager InstanceModuleManager { get; private set; }
+        internal static WebPeeperModule Instance { get; private set; }
         [ImportingConstructor]
         public WebPeeperModule([Import("ModuleParameters")] ModuleParameters moduleParameters) : base(moduleParameters)
         {
@@ -53,22 +56,27 @@ namespace BhModule.WebPeeper
                 {
                     return ((MenuItem)i).Text == InstanceModuleManager.Manifest.Name;
                 }) as MenuItem;
+
             CefService = new CefService();
-            UIService = new UIService();
+            ImeService = new ImeService();
+            UiService = new UiService();
+            DownloadService = new DownloadService();
         }
         protected override async Task LoadAsync()
         {
             await Task.Run(() =>
             {
+                Settings.Load();
                 CefService.Load();
-                UIService.Load();
+                UiService.Load();
             });
         }
         protected override void Unload()
         {
             Settings?.Unload();
             CefService?.Unload();
-            UIService?.Unload();
+            ImeService?.Unload();
+            UiService?.Unload();
         }
     }
 

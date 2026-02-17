@@ -4,21 +4,42 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame.Extended.BitmapFonts;
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
 
 namespace BhModule.WebPeeper.Window
 {
-    public class Warning : FlowPanel
+    internal class Warning : FlowPanel
     {
+        static readonly IReadOnlyDictionary<CefAvailableVersion, string> _versions = GetVersions();
+        readonly Dropdown _versionSeletor;
         readonly WarningContent _content;
         readonly Checkbox _alwaysHideCheckbox;
         readonly StandardButton _acceptBtn;
-        readonly Action _createWebPainter;
-        static public bool Accepted = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
-        public Warning(Action createWebPainter)
+        public event EventHandler<EventArgs> Accepted;
+        static public bool IsAccepted { get; private set; } = !WebPeeperModule.Instance.Settings.IsShowWarning.Value;
+        public Warning()
         {
-            _createWebPainter = createWebPainter;
             FlowDirection = ControlFlowDirection.SingleTopToBottom;
             CanScroll = true;
+            _versionSeletor = new Dropdown()
+            {
+                Parent = this,
+                Width = 110,
+                SelectedItem = _versions[WebPeeperModule.Instance.Settings.CefVersion.Value],
+                BasicTooltipText = WebPeeperModule.Instance.Settings.CefVersion.Description,
+            };
+            _versionSeletor.ValueChanged += (s, e) =>
+            {
+                var version = _versions.FirstOrDefault(v => v.Value == e.CurrentValue);
+                WebPeeperModule.Instance.Settings.CefVersion.Value = version.Key;
+            };
+            foreach (var item in _versions)
+            {
+                _versionSeletor.Items.Add(item.Value);
+            }
+            WebPeeperModule.Instance.Settings.CefVersion.SettingChanged += UpdateVersion;
             _content = new() { Parent = this, };
             _alwaysHideCheckbox = new()
             {
@@ -38,28 +59,48 @@ namespace BhModule.WebPeeper.Window
         {
             base.OnResized(e);
             RecalculateLayout();
-            WebPeeperModule.Instance.CefService.SetBrowserSize(Width, Height);
         }
         public override void RecalculateLayout()
         {
             base.RecalculateLayout();
-            if (_content is null || _acceptBtn is null || _alwaysHideCheckbox is null) return;
+            if (_versionSeletor is null || _content is null || _acceptBtn is null || _alwaysHideCheckbox is null) return;
+            _versionSeletor.Left = ContentRegion.Width / 2 - _versionSeletor.Width / 2;
             _content.Left = 15;
-            _content.Height = ContentRegion.Height - _acceptBtn.Height - _alwaysHideCheckbox.Height - (int)OuterControlPadding.Y - 1;
+            _content.Height = ContentRegion.Height - _versionSeletor.Height - _acceptBtn.Height - _alwaysHideCheckbox.Height - (int)OuterControlPadding.Y - 1;
             _content.Width = ContentRegion.Width - 30;
-            _acceptBtn.Left = ContentRegion.Width / 2 - _acceptBtn.Width / 2;
             _alwaysHideCheckbox.Left = ContentRegion.Width / 2 - _alwaysHideCheckbox.Width / 2;
+            _acceptBtn.Left = ContentRegion.Width / 2 - _acceptBtn.Width / 2;
         }
         void Accept()
         {
-            Parent = null;
-            Accepted = true;
-            _createWebPainter();
+            IsAccepted = true;
+            Accepted?.Invoke(this, EventArgs.Empty);
             WebPeeperModule.Instance.Settings.IsShowWarning.Value = !_alwaysHideCheckbox.Checked;
             Dispose();
         }
+        void UpdateVersion(object sender, ValueChangedEventArgs<CefAvailableVersion> evt)
+        {
+            _versionSeletor.SelectedItem = _versions[evt.NewValue];
+        }
+        static Dictionary<CefAvailableVersion, string> GetVersions()
+        {
+            Dictionary<CefAvailableVersion, string> versions = [];
+            var fields = typeof(CefAvailableVersion).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+            foreach (var field in fields)
+            {
+                var descriptionAttr = (DescriptionAttribute)field.GetCustomAttributes(typeof(DescriptionAttribute), false).FirstOrDefault();
+                versions.Add((CefAvailableVersion)field.GetValue(null), descriptionAttr.Description);
+            }
+            return versions;
+        }
+        protected override void DisposeControl()
+        {
+            Accepted = null;
+            WebPeeperModule.Instance.Settings.CefVersion.SettingChanged -= UpdateVersion;
+            base.DisposeControl();
+        }
     }
-    public class WarningContent : Control
+    internal class WarningContent : Control
     {
         readonly string _originText = Strings.UIService.Warning;
         string _text = "";

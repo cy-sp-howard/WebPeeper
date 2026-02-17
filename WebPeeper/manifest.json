@@ -1,6 +1,6 @@
 {
   "name": "WebPeeper",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "namespace": "Yeh.WebPeeper",
   "package": "WebPeeper.dll",
   "manifest_version": 1,
@@ -10,9 +10,7 @@
   },
   "url": "https://github.com/cy-sp-howard/WebPeeper",
   "directories": [
-    "webpeeper",
-    "webpeeper\\CefCache",
-    "webpeeper\\CefUserData"
+    "webpeeper"
   ],
   "contributors": [
     {

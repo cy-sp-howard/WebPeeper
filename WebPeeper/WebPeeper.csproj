@@ -69,6 +69,8 @@
     <Reference Include="System.Xml.ReaderWriter" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DownloadService.cs" />
+    <Compile Include="ImeService.cs" />
     <Compile Include="Strings\UIService.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -79,11 +81,12 @@
     <Compile Include="Window\BrowserWindowView.cs" />
     <Compile Include="Window\BrowserWindow.cs" />
     <Compile Include="CefService.cs" />
+    <Compile Include="Window\ProgressBar.cs" />
     <Compile Include="Window\Warning.cs" />
     <Compile Include="Window\IconButton.cs" />
     <Compile Include="ModuleSettings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="UIService.cs" />
+    <Compile Include="UiService.cs" />
     <Compile Include="Utils.cs" />
     <Compile Include="Window\WebPainter.cs" />
   </ItemGroup>
@@ -94,12 +97,6 @@
   <ItemGroup>
     <PackageReference Include="BlishHUD">
       <Version>1.2.0</Version>
-    </PackageReference>
-    <PackageReference Include="CefSharp.OffScreen">
-      <Version>103.0.90</Version>
-    </PackageReference>
-    <PackageReference Include="System.Drawing.Common">
-      <Version>10.0.0</Version>
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
@@ -124,6 +121,7 @@
     <ProjectReference Include="..\CefHelper\CefHelper.csproj">
       <Project>{58af652c-4194-4343-b724-e30a88aba248}</Project>
       <Name>CefHelper</Name>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
@@ -140,24 +138,32 @@
     <WebPeeperBhmPath>$(OutDir)$(ProjectName).bhm</WebPeeperBhmPath>
     <TempPath>$(OutDir).bhm\</TempPath>
   </PropertyGroup>
-  <Target Name="BuildWebPeeperModule" AfterTargets="Build">
+  <Target Name="BuildAnotherCefHelper" BeforeTargets="Build">
+    <ItemGroup>
+      <CefVersions Include="144.0.120" />
+    </ItemGroup>
+    <MSBuild Projects="..\CefHelper\CefHelper.csproj" Properties="BaseIntermediateOutputPath=obj\%(CefVersions.Identity)\;Configuration=$(Configuration);CefVersion=%(CefVersions.Identity);CopyDir=$([System.IO.Path]::GetFullPath($(OutDir)))helpers\%(CefVersions.Identity)\" Targets="Restore;Build" />
+  </Target>
+  <Target Name="BuildBlishHUDModule" AfterTargets="Build">
     <Delete Files="$(WebPeeperBhmPath)" />
     <ItemGroup>
-      <RefFiles Include="$(OutDir)ref\**" />
+      <RefFiles Include="$(ProjectDir)ref\**" />
+      <HelperFiles Include="$(OutDir)helpers\**" />
     </ItemGroup>
     <Copy SourceFiles="@(RefFiles)" DestinationFolder="$(TempPath)ref\%(RecursiveDir)" />
+    <Copy SourceFiles="@(HelperFiles)" DestinationFolder="$(TempPath)cef\%(RecursiveDir)" />
     <Copy SourceFiles="$(OutDir)fr\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)fr\" />
     <Copy SourceFiles="$(OutDir)es\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)es\" />
     <Copy SourceFiles="$(OutDir)de\$(ProjectName).resources.dll" DestinationFolder="$(TempPath)de\" />
     <Copy SourceFiles="$(OutDir)$(ProjectName).dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)manifest.json" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.OffScreen.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.Core.dll" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.Core.Runtime.dll" DestinationFolder="$(TempPath)_\" />
-    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.exe" DestinationFolder="$(TempPath)" />
-    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.Core.dll" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefHelper.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(ProjectDir)manifest.json" DestinationFolder="$(TempPath)" />
+    <Copy SourceFiles="$(OutDir)CefSharp.OffScreen.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.Core.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.Core.Runtime.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.exe" DestinationFolder="$(TempPath)cef\103.0.90\" />
+    <Copy SourceFiles="$(OutDir)CefSharp.BrowserSubprocess.Core.dll" DestinationFolder="$(TempPath)cef\103.0.90\" />
     <ZipDirectory SourceDirectory="$(TempPath)" DestinationFile="$(WebPeeperBhmPath)" Overwrite="true" />
     <RemoveDir Directories="$(TempPath)" />
   </Target>

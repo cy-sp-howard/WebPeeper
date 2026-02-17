@@ -1,8 +1,7 @@
 ﻿using Blish_HUD;
 using Blish_HUD.Controls;
 using Blish_HUD.Input;
-using CefSharp;
-using CefSharp.OffScreen;
+using CefHelper;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Newtonsoft.Json;
@@ -16,9 +15,9 @@ using System.Text.RegularExpressions;
 
 namespace BhModule.WebPeeper
 {
-    public class BookmarkPanel : Panel
+    internal class BookmarkPanel : Panel
     {
-        static public BookmarkPanel Instance;
+        static public BookmarkPanel Instance { get; private set; }
         static readonly Point _bgOverSize = new(75, 50);
         static readonly Texture2D _bgTexture = Content.GetTexture("controls/window/502049");
         static readonly Texture2D _editBtnTexture = WebPeeperModule.Instance.ContentsManager.GetTexture("edit.png");
@@ -37,7 +36,6 @@ namespace BhModule.WebPeeper
         Rectangle _bgSourceRect = Rectangle.Empty;
         Rectangle _emptyDestRect = Rectangle.Empty;
         bool _editing = false;
-        ChromiumWebBrowser WebBrowser => WebPeeperModule.Instance.CefService.WebBrowser;
         public BookmarkPanel()
         {
             Instance = this;
@@ -56,14 +54,12 @@ namespace BhModule.WebPeeper
             };
             _addBtn.Click += delegate
             {
-                if (WebBrowser is null || !WebBrowser.CanExecuteJavascriptInMainFrame) return;
-                var getTitleTask = WebBrowser.EvaluateScriptAsync("document.title");
-                getTitleTask.Wait(TimeSpan.FromSeconds(1));
-                var bookmarkName = getTitleTask.IsCanceled ? WebPeeperModule.Instance.UIService.BrowserWindow.Subtitle : (string)getTitleTask.Result.Result;
+                var title = Browser.GetMainFrameTitle().Result;
+                var bookmarkName = string.IsNullOrWhiteSpace(title) ? WebPeeperModule.Instance.UiService.BrowserWindow.Subtitle : title;
                 AddBookmark(new()
                 {
                     Name = _notSupportStringMatcher.Replace(bookmarkName, "-"),
-                    URL = WebBrowser.Address
+                    URL = Browser.Address
                 });
             };
             _menuContainer = new BookmarkMenu()
@@ -87,7 +83,7 @@ namespace BhModule.WebPeeper
                 else _menuContainer.Opacity = 1f;
             });
 
-            _jsonPath = Path.Combine(WebPeeperModule.Instance.CefService.CefSettingFolder, _bookmarksJsonFileName);
+            _jsonPath = Path.Combine(WebPeeperModule.Instance.DataFolder, _bookmarksJsonFileName);
             if (!File.Exists(_jsonPath)) return;
             try
             {
@@ -180,7 +176,7 @@ namespace BhModule.WebPeeper
         void SetBtnsLocation()
         {
             _editBtn.Location = new(Location.X + 10, Location.Y + 10);
-            _addBtn.Location = new(Location.X + Width - 50, _editBtn.Location.Y);
+            _addBtn.Location = new(Location.X + Width - 25, _editBtn.Location.Y);
         }
         void HideBtns()
         {
@@ -263,7 +259,7 @@ namespace BhModule.WebPeeper
             File.WriteAllText(_jsonPath, JsonConvert.SerializeObject(_bookmarkMenuItems.Keys));
         }
     }
-    public class BookmarkMenu : Menu
+    internal class BookmarkMenu : Menu
     {
         static readonly FieldInfo _childPropertyChangedField = typeof(Control).GetField("PropertyChanged", BindingFlags.Instance | BindingFlags.NonPublic);
         const int ItemHeight = 40;
@@ -298,7 +294,7 @@ namespace BhModule.WebPeeper
             base.RecalculateLayout();
         }
     }
-    public class BookmarkItem : MenuItem
+    internal class BookmarkItem : MenuItem
     {
         readonly Bookmark _bookmark;
         public event EventHandler<EventArgs> Removed;
@@ -339,17 +335,17 @@ namespace BhModule.WebPeeper
         }
         public override void UpdateContainer(GameTime t)
         {
-            if (_sortBtn?.Parent is null)
+            if (_sortBtn is not null && _sortBtn.Parent is null)
             {
-                _sortBtn.Parent = Parent.Parent;
+                _sortBtn.Parent = BookmarkPanel.Instance;
             }
-            if (_removeBtn?.Parent is null)
+            if (_removeBtn is not null && _removeBtn.Parent is null)
             {
-                _removeBtn.Parent = Parent.Parent;
+                _removeBtn.Parent = BookmarkPanel.Instance;
             }
-            if (_nameInput?.Parent is null)
+            if (_nameInput is not null && _nameInput.Parent is null)
             {
-                _nameInput.Parent = Parent.Parent;
+                _nameInput.Parent = BookmarkPanel.Instance;
             }
             SetEditControlBounds();
         }
@@ -365,11 +361,10 @@ namespace BhModule.WebPeeper
         }
         protected override void OnClick(MouseEventArgs e)
         {
-            var browser = WebPeeperModule.Instance.CefService.WebBrowser;
-            if (!_editing && browser is not null)
+            if (!_editing)
             {
-                browser.Load(_bookmark.URL);
-                Parent.Parent.Hide();
+                Browser.LoadUrlAsync(_bookmark.URL);
+                BookmarkPanel.Instance?.Hide();
             }
             base.OnClick(e);
         }
@@ -437,14 +432,14 @@ namespace BhModule.WebPeeper
             base.DisposeControl();
         }
     }
-    public class Bookmark
+    internal class Bookmark
     {
         [JsonProperty("name", Required = Required.Always)]
         public string Name;
         [JsonProperty("url", Required = Required.Always)]
         public string URL;
     }
-    public class BookmarkDraggedEventArgs(Bookmark bookmark, int position) : EventArgs
+    internal class BookmarkDraggedEventArgs(Bookmark bookmark, int position) : EventArgs
     {
         readonly public Bookmark Bookmark = bookmark;
         readonly public int Position = position;
