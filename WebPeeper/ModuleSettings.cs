@@ -30,6 +30,7 @@ namespace BhModule.WebPeeper
         public SettingEntry<KeyBinding> ZoomInKey { get; private set; }
         public SettingEntry<KeyBinding> ZoomOutKey { get; private set; }
         public SettingEntry<KeyBinding> CaptureKeyboardKey { get; private set; }
+        public SettingEntry<KeyBinding> BrowserDevToolsKey { get; private set; }
         public SettingEntry<string> HomeUrl { get; private set; }
         public SettingEntry<string> SearchUrl { get; private set; }
         public SettingEntry<string> WebBgColor { get; private set; }
@@ -42,12 +43,13 @@ namespace BhModule.WebPeeper
         public SettingEntry<bool> IsFollowBhFps { get; private set; }
         public SettingEntry<bool> IsBlockKeybinds { get; private set; }
         public SettingEntry<bool> IsShowWarning { get; private set; }
+        CefService CefService => WebPeeperModule.Instance.CefService;
         public ModuleSettings(SettingCollection settings)
         {
             CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => $"Browser core version, each version (excluding {CefService.DefaultVersion}) requires an additional 200 MB download.");
             CefVersion.SettingChanged += (sender, e) =>
             {
-                WebPeeperModule.Instance.CefService.ApplySettingVersion();
+                CefService.ApplySettingVersion();
             };
             CefErrorVersion = settings.DefineSetting(nameof(CefErrorVersion), CefAvailableVersion.v103, () => "", () => "");
             SettingsKey = settings.DefineSetting(nameof(SettingsKey), new KeyBinding(ModifierKeys.Ctrl, Keys.F12), () => "Settings Toggle", () => "");
@@ -65,6 +67,11 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey = settings.DefineSetting(nameof(CaptureKeyboardKey), new KeyBinding(ModifierKeys.Ctrl, Keys.Space), () => "Focus the Blish-HUD Window", () => "For web input field, only works when the cursor is within the web area. In theory it would auto-focus when caret is flashing.");
             CaptureKeyboardKey.Value.Activated += OnCaptureKeyboardActivated;
             CaptureKeyboardKey.Value.Enabled = true;
+#if DEBUG
+            BrowserDevToolsKey = settings.DefineSetting(nameof(BrowserDevToolsKey), new KeyBinding(ModifierKeys.Ctrl | ModifierKeys.Shift, Keys.I), () => "Open Browser DevTools", () => "");
+            BrowserDevToolsKey.Value.Activated += ShowBrowserDevTools;
+            BrowserDevToolsKey.Value.Enabled = true;
+#endif
             SearchUrl = settings.DefineSetting(nameof(SearchUrl), _defaultSearchUrl, () => "Search Engine", () => "{text} is represent text variable.");
             SearchUrl.SettingChanged += (sender, e) =>
             {
@@ -121,7 +128,7 @@ namespace BhModule.WebPeeper
             IsMobileLayout.SettingChanged += (s, e) =>
             {
                 if (!CefService.LibLoadStarted) return;
-                WebPeeperModule.Instance.CefService.ApplyUserAgent();
+                CefService.ApplyUserAgent();
             };
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
             IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User Data", () => $"Deletes all data of the previous session each time {WebPeeperModule.Instance.Name} opens.");
@@ -129,7 +136,7 @@ namespace BhModule.WebPeeper
             IsFollowBhFps.SettingChanged += (s, e) =>
             {
                 if (!CefService.LibLoadStarted) return;
-                WebPeeperModule.Instance.CefService.ApplyFrameRate();
+                CefService.ApplyFrameRate();
             };
             IsBlockKeybinds = settings.DefineSetting(nameof(IsBlockKeybinds), true, () => "Block All Blish-HUD Keybinds while the Web is Accepting Input", () => "Uncheck if keybinds fail after typing.");
             IsShowWarning = settings.DefineSetting(nameof(IsShowWarning), true, () => "Show Outdated Warning", () => "");
@@ -146,6 +153,9 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey.Value.Activated -= OnCaptureKeyboardActivated;
             ZoomInKey.Value.Activated -= OnZoomInActivated;
             ZoomOutKey.Value.Activated -= OnZoomOutActivated;
+#if DEBUG
+            BrowserDevToolsKey.Value.Activated -= ShowBrowserDevTools;
+#endif
             WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= OnSettingsHidden;
             GameService.Overlay.BlishHudWindow.Hidden -= OnSettingsHidden;
             WebPeeperSettingsView.UpdateWebWindowOpacityTitle = null;
@@ -188,6 +198,11 @@ namespace BhModule.WebPeeper
         void ToggleWebWindow(object sender, EventArgs e)
         {
             WebPeeperModule.Instance.UiService?.ToggleBrowser();
+        }
+        void ShowBrowserDevTools(object sender, EventArgs e)
+        {
+            if (!CefService.LibLoadStarted) return;
+            CefService.ShowDevTools();
         }
         void OnCaptureKeyboardActivated(object sender, EventArgs e)
         {

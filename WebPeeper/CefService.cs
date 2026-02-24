@@ -213,6 +213,10 @@ namespace BhModule.WebPeeper
             }
             return null;
         }
+        public void ShowDevTools()
+        {
+            Browser.ShowDevTools();
+        }
         public Task<Texture2D> GetScreenshot()
         {
             return Browser.GetScreenshot().ContinueWith(t =>
