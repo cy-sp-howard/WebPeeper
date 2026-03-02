@@ -91,16 +91,12 @@
     <Compile Include="Window\WebPainter.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="app.config" />
     <None Include="manifest.json" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BlishHUD">
       <Version>1.2.0</Version>
     </PackageReference>
-  </ItemGroup>
-  <ItemGroup>
-    <WCFMetadata Include="Connected Services\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="ref\empty.png" />
