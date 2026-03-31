@@ -33,6 +33,7 @@ namespace BhModule.WebPeeper
         public SettingEntry<string> HomeUrl { get; private set; }
         public SettingEntry<string> SearchUrl { get; private set; }
         public SettingEntry<string> WebBgColor { get; private set; }
+        public SettingEntry<float> SoundVolume { get; private set; }
         public SettingEntry<float> WebWindowOpacity { get; private set; }
         public SettingEntry<bool> IsAutoPauseWeb { get; private set; }
         public SettingEntry<bool> IsAutoQuitProcess { get; private set; }
@@ -98,6 +99,14 @@ namespace BhModule.WebPeeper
                 if (string.IsNullOrWhiteSpace(e.NewValue)) Task.Delay(10).ContinueWith(_ => WebBgColor.Value = _defaultBgColor);
                 WebPainter.Instance?.ApplyBgTexture();
             };
+            SoundVolume = settings.DefineSetting(nameof(SoundVolume), 1f, () => $"Sound Volume < {Math.Round(SoundVolume.Value, 2)} >", () => "");
+            SoundVolume.SetRange(0f, 1f);
+            SoundVolume.SettingChanged += (sender, e) =>
+            {
+                WebPeeperSettingsView.UpdateSoundVolumeTitle?.Invoke();
+                if (!CefService.LibLoadStarted) return;
+                SetSoundVolume(e.NewValue);
+            };
             WebWindowOpacity = settings.DefineSetting(nameof(WebWindowOpacity), 1f, () => $"Window Opacity < {Math.Round(WebWindowOpacity.Value, 2)} >", () => "");
             WebWindowOpacity.SetRange(0.1f, 1f);
             WebWindowOpacity.SettingChanged += (sender, e) =>
@@ -148,6 +157,7 @@ namespace BhModule.WebPeeper
             ZoomOutKey.Value.Activated -= OnZoomOutActivated;
             WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= OnSettingsHidden;
             GameService.Overlay.BlishHudWindow.Hidden -= OnSettingsHidden;
+            WebPeeperSettingsView.UpdateSoundVolumeTitle = null;
             WebPeeperSettingsView.UpdateWebWindowOpacityTitle = null;
             WebPeeperSettingsView.UpdateIsAutoPauseWebState = null;
             CefVersionSettingView.UpdateView = null;
@@ -223,10 +233,15 @@ namespace BhModule.WebPeeper
         {
             Browser.Zoom(-1);
         }
+        void SetSoundVolume(float val)
+        {
+            Browser.SetVolume(val);
+        }
     }
     // SettingsView never call Unload, so cannot bind event (v1.2.0).
     internal class WebPeeperSettingsView(SettingCollection settings) : View
     {
+        static public Action UpdateSoundVolumeTitle;
         static public Action UpdateWebWindowOpacityTitle;
         static public Action UpdateIsAutoPauseWebState;
         FlowPanel _rootflowPanel;
@@ -234,6 +249,7 @@ namespace BhModule.WebPeeper
         readonly string[] _hiddenSettings = ["CefErrorVersion"];
         protected override void Build(Container buildPanel)
         {
+            var settings = WebPeeperModule.Instance.Settings;
             _rootflowPanel = new FlowPanel()
             {
                 Size = buildPanel.Size,
@@ -249,13 +265,13 @@ namespace BhModule.WebPeeper
             foreach (var setting in _settings.Where(s => s.SessionDefined && !_hiddenSettings.Contains(s.EntryKey)))
             {
                 IView settingView = null;
-                if (setting.EntryKey == "WebBgColor" && setting is SettingEntry<string> stringSetting)
+                if (setting.Equals(settings.WebBgColor))
                 {
-                    settingView = new HexColorSettingView(stringSetting, _rootflowPanel.Width);
+                    settingView = new HexColorSettingView(settings.WebBgColor, _rootflowPanel.Width);
                 }
-                else if (setting.EntryKey == "CefVersion" && setting is SettingEntry<CefAvailableVersion> versionSetting)
+                else if (setting.Equals(settings.CefVersion))
                 {
-                    settingView = new CefVersionSettingView(versionSetting, _rootflowPanel.Width);
+                    settingView = new CefVersionSettingView(settings.CefVersion, _rootflowPanel.Width);
                 }
 
                 if (settingView is not null || (settingView = SettingView.FromType(setting, _rootflowPanel.Width)) is not null)
@@ -266,14 +282,24 @@ namespace BhModule.WebPeeper
                         HeightSizingMode = SizingMode.AutoSize,
                         Parent = _rootflowPanel
                     };
-                    if (setting is SettingEntry<float> settingFloat && settingView is FloatSettingView settingViewFloat && settingFloat.EntryKey == "WebWindowOpacity")
+                    if (setting.Equals(settings.WebWindowOpacity)
+                        && settingView is FloatSettingView settingViewFloat)
                     {
                         UpdateWebWindowOpacityTitle = () =>
                         {
-                            settingViewFloat.DisplayName = settingFloat.GetDisplayNameFunc();
+                            settingViewFloat.DisplayName = settings.WebWindowOpacity.GetDisplayNameFunc();
                         };
                     }
-                    else if (setting is SettingEntry<bool> settingBool && settingView is BoolSettingView settingViewBool && settingBool.EntryKey == "IsAutoPauseWeb")
+                    else if (setting.Equals(settings.SoundVolume)
+                        && settingView is FloatSettingView settingViewFloat2)
+                    {
+                        UpdateSoundVolumeTitle = () =>
+                        {
+                            settingViewFloat2.DisplayName = settings.SoundVolume.GetDisplayNameFunc();
+                        };
+                    }
+                    else if (setting.Equals(settings.IsAutoPauseWeb)
+                        && settingView is BoolSettingView settingViewBool)
                     {
                         UpdateIsAutoPauseWebState = () => { settingViewBool.Presenter.DoUpdateView(); };
                     }

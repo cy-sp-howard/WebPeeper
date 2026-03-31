@@ -66,7 +66,7 @@ namespace CefHelper
             Cef.Initialize(settings);
             Logger.Debug("CefSettingInit");
         }
-        static public Task<bool> Create(string defaultUrl, int frameRate, bool isMobile)
+        static public Task<bool> Create(string defaultUrl, int frameRate, bool isMobile, float volume)
         {
             Logger.Debug("Create: resolve if browser initialized.");
             var tcs = new TaskCompletionSource<bool>();
@@ -103,6 +103,9 @@ namespace CefHelper
                     };
                     _webBrowser.RequestHandler = new RequestHandler() { IsMobile = isMobile };
                     _webBrowser.LifeSpanHandler = new PopupHandler();
+                    var volumeHandler = new VolumeHandler();
+                    volumeHandler.SetVolume(volume);
+                    _webBrowser.AudioHandler = volumeHandler;
                     _webBrowser.RenderProcessMessageHandler = new NodeFocusHandler()
                     {
                         FocusNodeChanged = (node) =>
@@ -461,6 +464,11 @@ namespace CefHelper
             {
                 handler.IsMobile = mobile;
             }
+        }
+        static public void SetVolume(float val)
+        {
+            if (_webBrowser is null || _webBrowser.AudioHandler is not VolumeHandler volumeHandler) return;
+            volumeHandler.SetVolume(val);
         }
         static public void Dispose()
         {

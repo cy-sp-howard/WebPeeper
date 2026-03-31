@@ -1,7 +1,12 @@
 ﻿using CefSharp;
 using CefSharp.Handler;
+using CefSharp.Structs;
+using Microsoft.Xna.Framework.Audio;
 using System;
+using System.Buffers;
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 namespace CefHelper
@@ -100,6 +105,93 @@ namespace CefHelper
                 }
             }
             return base.OnBeforeResourceLoad(chromiumWebBrowser, browser, frame, request, callback);
+        }
+    }
+    class VolumeHandler() : AudioHandler
+    {
+        float _defaultVolume = 1;
+        Process _process;
+        DynamicSoundEffectInstance _dynamicSound;
+        byte[] _channelMemoryData;
+        int _channelCount;
+        int _channelMemorySize;
+        int _framesFloatMemorySize;
+        byte[] _framesFloatMemoryData;
+        int _frameCount;
+        short[] _frames;
+        byte[] _framesMemoryData;
+        protected override bool GetAudioParameters(IWebBrowser chromiumWebBrowser, IBrowser browser, ref AudioParameters parameters)
+        {
+            return true;
+        }
+        protected override void OnAudioStreamStarted(IWebBrowser chromiumWebBrowser, IBrowser browser, AudioParameters parameters, int channels)
+        {
+            _process ??= Process.GetCurrentProcess();
+
+            var isMonoChannel = channels == 1;
+            _channelCount = isMonoChannel ? 1 : 2;
+            _channelMemorySize = sizeof(Int64) * _channelCount;
+            _channelMemoryData = ArrayPool<byte>.Shared.Rent(_channelMemorySize);
+
+            _frameCount = parameters.FramesPerBuffer;
+            var _frameDataSize = _frameCount * _channelCount;
+            _frames = ArrayPool<short>.Shared.Rent(_frameDataSize);
+            _framesMemoryData = new byte[sizeof(short) * _frameDataSize];
+            _framesFloatMemorySize = sizeof(float) * _frameCount;
+            _framesFloatMemoryData = ArrayPool<byte>.Shared.Rent(_framesFloatMemorySize);
+
+            _dynamicSound = new DynamicSoundEffectInstance(parameters.SampleRate, isMonoChannel ? AudioChannels.Mono : AudioChannels.Stereo);
+            SetVolume(_defaultVolume);
+            _dynamicSound.Play();
+        }
+        protected override void OnAudioStreamStopped(IWebBrowser chromiumWebBrowser, IBrowser browser)
+        {
+            _dynamicSound?.Dispose();
+            _dynamicSound = null;
+            ReleaseRented();
+        }
+        protected override void OnAudioStreamPacket(IWebBrowser chromiumWebBrowser, IBrowser browser, IntPtr data, int noOfFrames, long pts)
+        {
+            Native.ReadProcessMemory(_process.Handle, data, _channelMemoryData, _channelMemorySize, out _);
+            var frames = _frames.AsSpan();
+
+            for (int channelIndex = 0; channelIndex < _channelCount; channelIndex++)
+            {
+                IntPtr channel = new(BitConverter.ToInt64(_channelMemoryData, channelIndex * sizeof(Int64)));
+                Native.ReadProcessMemory(_process.Handle, channel, _framesFloatMemoryData, _framesFloatMemorySize, out _);
+
+                for (int frameIndex = 0; frameIndex < _frameCount; frameIndex++)
+                {
+                    float sample = BitConverter.ToSingle(_framesFloatMemoryData, frameIndex * sizeof(float));
+                    frames[frameIndex * _channelCount + channelIndex] = (short)(sample * short.MaxValue);
+                }
+            }
+            MemoryMarshal.AsBytes(frames).CopyTo(_framesMemoryData);
+            _dynamicSound.SubmitBuffer(_framesMemoryData);
+        }
+        void ReleaseRented()
+        {
+            ArrayPool<byte>.Shared.Return(_framesFloatMemoryData);
+            _framesFloatMemoryData = null;
+
+            ArrayPool<short>.Shared.Return(_frames);
+            _frames = null;
+
+            ArrayPool<byte>.Shared.Return(_channelMemoryData);
+            _channelMemoryData = null;
+        }
+        public void SetVolume(float val)
+        {
+            _defaultVolume = val;
+            if (_dynamicSound is null) return;
+            _dynamicSound.Volume = val;
+        }
+        protected override void Dispose(bool disposing)
+        {
+            _dynamicSound?.Dispose();
+            _process?.Dispose();
+            ReleaseRented();
+            base.Dispose(disposing);
         }
     }
 }

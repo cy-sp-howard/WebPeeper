@@ -1,13 +1,14 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 
 namespace CefHelper
 {
     static internal class Native
     {
-
         [DllImport("user32.dll")]
         static public extern short GetKeyState(VK nVirtKey);
-
+        [DllImport("kernel32.dll")]
+        static public extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int nSize, out IntPtr lpNumberOfBytesRead);
         static public bool IsKeyDown(VK wparam)
         {
             return (GetKeyState(wparam) & 0x8000) != 0;

@@ -22,6 +22,7 @@ namespace BhModule.WebPeeper
         static readonly Dictionary<CefAvailableVersion, CefPkgVersion> _versions = new() {
             { CefAvailableVersion.v103, new("103.0.90","103.0.9") },
             { CefAvailableVersion.v144, new("144.0.120","144.0.12") },
+            { CefAvailableVersion.v146, new("146.0.70","146.0.7") },
         };
         static public CefPkgVersion CurrentVersion { get; private set; } = _versions[Settings.CefVersion.Value];
         static string CefSharpVersionsFolder => DirectoryUtil.RegisterDirectory(Module.DataFolder, "CefVersions");
@@ -34,7 +35,7 @@ namespace BhModule.WebPeeper
         static public bool LibLoadStarted { get; private set; } = false;
         bool _eventHandlersBound = false;
         static public IReadOnlyDictionary<CefAvailableVersion, CefPkgVersion> Versions => _versions;
-        static readonly CefPkgVersion _suggestionVersion = _versions[CefAvailableVersion.v144];
+        static readonly CefPkgVersion _suggestionVersion = _versions[CefAvailableVersion.v146];
         static public readonly CefPkgVersion DefaultVersion = _versions[CefAvailableVersion.v103];
 
         static bool IsDefaultVersion => CurrentVersion == DefaultVersion;
@@ -300,7 +301,7 @@ namespace BhModule.WebPeeper
                     CefCacheFolder,
                     _cefSharpFolder
                     );
-                Browser.Create(Settings.HomeUrl.Value, Settings.GetFrameRate(), Settings.IsMobileLayout.Value)
+                Browser.Create(Settings.HomeUrl.Value, Settings.GetFrameRate(), Settings.IsMobileLayout.Value, Settings.SoundVolume.Value)
                     .ContinueWith(t =>
                     {
                         if (t.Status == TaskStatus.RanToCompletion) tcs.TrySetResult(true);
@@ -347,6 +348,8 @@ namespace BhModule.WebPeeper
         [Description(" 103.0.90")]
         v103,
         [Description(" 144.0.120")]
-        v144
+        v144,
+        [Description(" 146.0.70")]
+        v146
     }
 }
