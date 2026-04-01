@@ -3,7 +3,6 @@ using CefSharp.Handler;
 using CefSharp.Structs;
 using Microsoft.Xna.Framework.Audio;
 using System;
-using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -131,14 +130,14 @@ namespace CefHelper
             var isMonoChannel = channels == 1;
             _channelCount = isMonoChannel ? 1 : 2;
             _channelMemorySize = sizeof(Int64) * _channelCount;
-            _channelMemoryData = ArrayPool<byte>.Shared.Rent(_channelMemorySize);
+            _channelMemoryData = new byte[_channelMemorySize];
 
             _frameCount = parameters.FramesPerBuffer;
             var _frameDataSize = _frameCount * _channelCount;
-            _frames = ArrayPool<short>.Shared.Rent(_frameDataSize);
+            _frames = new short[_frameDataSize];
             _framesMemoryData = new byte[sizeof(short) * _frameDataSize];
             _framesFloatMemorySize = sizeof(float) * _frameCount;
-            _framesFloatMemoryData = ArrayPool<byte>.Shared.Rent(_framesFloatMemorySize);
+            _framesFloatMemoryData = new byte[_framesFloatMemorySize];
 
             _dynamicSound = new DynamicSoundEffectInstance(parameters.SampleRate, isMonoChannel ? AudioChannels.Mono : AudioChannels.Stereo);
             SetVolume(_defaultVolume);
@@ -148,7 +147,6 @@ namespace CefHelper
         {
             _dynamicSound?.Dispose();
             _dynamicSound = null;
-            ReleaseRented();
         }
         protected override void OnAudioStreamPacket(IWebBrowser chromiumWebBrowser, IBrowser browser, IntPtr data, int noOfFrames, long pts)
         {
@@ -169,17 +167,6 @@ namespace CefHelper
             MemoryMarshal.AsBytes(frames).CopyTo(_framesMemoryData);
             _dynamicSound.SubmitBuffer(_framesMemoryData);
         }
-        void ReleaseRented()
-        {
-            ArrayPool<byte>.Shared.Return(_framesFloatMemoryData);
-            _framesFloatMemoryData = null;
-
-            ArrayPool<short>.Shared.Return(_frames);
-            _frames = null;
-
-            ArrayPool<byte>.Shared.Return(_channelMemoryData);
-            _channelMemoryData = null;
-        }
         public void SetVolume(float val)
         {
             _defaultVolume = val;
@@ -190,7 +177,6 @@ namespace CefHelper
         {
             _dynamicSound?.Dispose();
             _process?.Dispose();
-            ReleaseRented();
             base.Dispose(disposing);
         }
     }
