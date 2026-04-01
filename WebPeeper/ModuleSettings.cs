@@ -30,6 +30,7 @@ namespace BhModule.WebPeeper
         public SettingEntry<KeyBinding> ZoomInKey { get; private set; }
         public SettingEntry<KeyBinding> ZoomOutKey { get; private set; }
         public SettingEntry<KeyBinding> CaptureKeyboardKey { get; private set; }
+        public SettingEntry<KeyBinding> BrowserDevToolsKey { get; private set; }
         public SettingEntry<string> HomeUrl { get; private set; }
         public SettingEntry<string> SearchUrl { get; private set; }
         public SettingEntry<string> WebBgColor { get; private set; }
@@ -43,13 +44,11 @@ namespace BhModule.WebPeeper
         public SettingEntry<bool> IsFollowBhFps { get; private set; }
         public SettingEntry<bool> IsBlockKeybinds { get; private set; }
         public SettingEntry<bool> IsShowWarning { get; private set; }
+        CefService CefService => WebPeeperModule.Instance.CefService;
         public ModuleSettings(SettingCollection settings)
         {
             CefVersion = settings.DefineSetting(nameof(CefVersion), CefAvailableVersion.v103, () => "CEF Version", () => $"Browser core version, each version (excluding {CefService.DefaultVersion}) requires an additional 200 MB download.");
-            CefVersion.SettingChanged += (sender, e) =>
-            {
-                WebPeeperModule.Instance.CefService.ApplySettingVersion();
-            };
+            CefVersion.SettingChanged += OnCefVersionChanged;
             CefErrorVersion = settings.DefineSetting(nameof(CefErrorVersion), CefAvailableVersion.v103, () => "", () => "");
             SettingsKey = settings.DefineSetting(nameof(SettingsKey), new KeyBinding(ModifierKeys.Ctrl, Keys.F12), () => "Settings Toggle", () => "");
             SettingsKey.Value.Activated += ToggleSettings;
@@ -66,80 +65,38 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey = settings.DefineSetting(nameof(CaptureKeyboardKey), new KeyBinding(ModifierKeys.Ctrl, Keys.Space), () => "Focus the Blish-HUD Window", () => "For web input field, only works when the cursor is within the web area. In theory it would auto-focus when caret is flashing.");
             CaptureKeyboardKey.Value.Activated += OnCaptureKeyboardActivated;
             CaptureKeyboardKey.Value.Enabled = true;
+#if DEBUG
+            BrowserDevToolsKey = settings.DefineSetting(nameof(BrowserDevToolsKey), new KeyBinding(ModifierKeys.Ctrl | ModifierKeys.Shift, Keys.I), () => "Open Browser DevTools", () => "");
+            BrowserDevToolsKey.Value.Activated += ShowBrowserDevTools;
+            BrowserDevToolsKey.Value.Enabled = true;
+#endif
             SearchUrl = settings.DefineSetting(nameof(SearchUrl), _defaultSearchUrl, () => "Search Engine", () => "{text} is represent text variable.");
-            SearchUrl.SettingChanged += (sender, e) =>
-            {
-                try
-                {
-                    var uriBuilder = new UriBuilder(e.NewValue);
-                    if ($"{uriBuilder.Uri}" == e.NewValue) return;
-                    Task.Delay(10).ContinueWith(_ => SearchUrl.Value = uriBuilder.Uri.AbsoluteUri);
-                }
-                catch { Task.Delay(10).ContinueWith(_ => SearchUrl.Value = _defaultSearchUrl); }
-            };
+            SearchUrl.SettingChanged += OnSearchUrlChanged;
             HomeUrl = settings.DefineSetting(nameof(HomeUrl), _defaultHomeUrl, () => "Home Page", () => "");
-            HomeUrl.SettingChanged += (s, e) =>
-            {
-                try
-                {
-                    var uriBuilder = new UriBuilder(e.NewValue);
-                    if ($"{uriBuilder.Uri}" == e.NewValue) return;
-                    Task.Delay(10).ContinueWith(_ => HomeUrl.Value = uriBuilder.Uri.AbsoluteUri);
-                }
-                catch { Task.Delay(10).ContinueWith(_ => HomeUrl.Value = _defaultHomeUrl); }
-            };
+            HomeUrl.SettingChanged += OnHomeUrlChanged;
             WebBgColor = settings.DefineSetting(nameof(WebBgColor), _defaultBgColor, () => "Web Background      ", () => "Default is transparent.");
             WebBgColor.SetValidation((color) =>
             {
                 try { ColorHelper.FromHex(color); return new(true); }
                 catch { return new(false); }
             });
-            WebBgColor.SettingChanged += (s, e) =>
-            {
-                if (string.IsNullOrWhiteSpace(e.NewValue)) Task.Delay(10).ContinueWith(_ => WebBgColor.Value = _defaultBgColor);
-                WebPainter.Instance?.ApplyBgTexture();
-            };
-            SoundVolume = settings.DefineSetting(nameof(SoundVolume), 1f, () => $"Sound Volume < {Math.Round(SoundVolume.Value, 2)} >", () => "");
+            WebBgColor.SettingChanged += OnWebBgColorChanged;
+            SoundVolume = settings.DefineSetting(nameof(SoundVolume), 1f, () => $"Sound Volume < {Math.Round(SoundVolume.Value, 2) * 100} >", () => "");
             SoundVolume.SetRange(0f, 1f);
-            SoundVolume.SettingChanged += (sender, e) =>
-            {
-                WebPeeperSettingsView.UpdateSoundVolumeTitle?.Invoke();
-                if (!CefService.LibLoadStarted) return;
-                SetSoundVolume(e.NewValue);
-            };
+            SoundVolume.SettingChanged += OnSoundVolumeChanged; ;
             WebWindowOpacity = settings.DefineSetting(nameof(WebWindowOpacity), 1f, () => $"Window Opacity < {Math.Round(WebWindowOpacity.Value, 2)} >", () => "");
             WebWindowOpacity.SetRange(0.1f, 1f);
-            WebWindowOpacity.SettingChanged += (sender, e) =>
-            {
-                var uiService = WebPeeperModule.Instance.UiService;
-                if (uiService is not null && uiService.BrowserWindow.Opacity > 0)
-                {
-                    uiService.BrowserWindow.Opacity = e.NewValue;
-                }
-                WebPeeperSettingsView.UpdateWebWindowOpacityTitle?.Invoke();
-            };
+            WebWindowOpacity.SettingChanged += OnWebWindowOpacityChanged;
             IsAutoPauseWeb = settings.DefineSetting(nameof(IsAutoPauseWeb), false, () => "Pause the Web Process while Close the Web Window", () => "");
             IsAutoQuitProcess = settings.DefineSetting(nameof(IsAutoQuitProcess), false, () => "Quit the Web Process while Close the Web Window", () => "");
-            IsAutoQuitProcess.SettingChanged += (sender, e) =>
-            {
-                IsAutoPauseWeb.SetDisabled(e.NewValue);
-                WebPeeperSettingsView.UpdateIsAutoPauseWebState?.Invoke();
-            };
+            IsAutoQuitProcess.SettingChanged += OnIsAutoQuitProcessChanged;
             IsAutoPauseWeb.SetDisabled(IsAutoQuitProcess.Value);
             IsMobileLayout = settings.DefineSetting(nameof(IsMobileLayout), true, () => "Use Mobile Website", () => "Whether use mobile User-Agent.");
-            IsMobileLayout.SettingChanged += (s, e) =>
-            {
-                if (!CefService.LibLoadStarted) return;
-                WebPeeperModule.Instance.CefService.ApplyUserAgent();
-            };
+            IsMobileLayout.SettingChanged += OnIsMobileLayoutChanged;
             IsUseTouch = settings.DefineSetting(nameof(IsUseTouch), false, () => "Simulate Touch", () => "Left mouse button send touch event instead. It is useful for mobile websites.");
             IsCleanMode = settings.DefineSetting(nameof(IsCleanMode), false, () => "Auto Clean User Data", () => $"Deletes all data of the previous session each time {WebPeeperModule.Instance.Name} opens.");
             IsFollowBhFps = settings.DefineSetting(nameof(IsFollowBhFps), false, () => "Same as Blish-HUD FPS Setting", () => "Default is locked at 30 FPS, up to 60 FPS if checked.");
-            IsFollowBhFps.SettingChanged += (s, e) =>
-            {
-                if (!CefService.LibLoadStarted) return;
-                WebPeeperModule.Instance.CefService.ApplyFrameRate();
-            };
+            IsFollowBhFps.SettingChanged += OnIsFollowBhFpsChanged;
             IsBlockKeybinds = settings.DefineSetting(nameof(IsBlockKeybinds), true, () => "Block All Blish-HUD Keybinds while the Web is Accepting Input", () => "Uncheck if keybinds fail after typing.");
             IsShowWarning = settings.DefineSetting(nameof(IsShowWarning), true, () => "Show Outdated Warning", () => "");
         }
@@ -155,12 +112,86 @@ namespace BhModule.WebPeeper
             CaptureKeyboardKey.Value.Activated -= OnCaptureKeyboardActivated;
             ZoomInKey.Value.Activated -= OnZoomInActivated;
             ZoomOutKey.Value.Activated -= OnZoomOutActivated;
+#if DEBUG
+            BrowserDevToolsKey.Value.Activated -= ShowBrowserDevTools;
+#endif
             WebPeeperModule.InstanceSettingsMenuItem.PropertyChanged -= OnSettingsHidden;
             GameService.Overlay.BlishHudWindow.Hidden -= OnSettingsHidden;
             WebPeeperSettingsView.UpdateSoundVolumeTitle = null;
             WebPeeperSettingsView.UpdateWebWindowOpacityTitle = null;
             WebPeeperSettingsView.UpdateIsAutoPauseWebState = null;
             CefVersionSettingView.UpdateView = null;
+            WebPeeperSettingsView.DisposeRootFlowPanel?.Invoke();
+
+            // SettingEntry save in the Blish.Hud, always same instance
+            CefVersion.SettingChanged -= OnCefVersionChanged;
+            SearchUrl.SettingChanged -= OnSearchUrlChanged;
+            HomeUrl.SettingChanged -= OnHomeUrlChanged;
+            WebBgColor.SettingChanged -= OnWebBgColorChanged;
+            SoundVolume.SettingChanged -= OnSoundVolumeChanged; ;
+            WebWindowOpacity.SettingChanged -= OnWebWindowOpacityChanged;
+            IsAutoQuitProcess.SettingChanged -= OnIsAutoQuitProcessChanged;
+            IsMobileLayout.SettingChanged -= OnIsMobileLayoutChanged;
+            IsFollowBhFps.SettingChanged -= OnIsFollowBhFpsChanged;
+        }
+        void OnCefVersionChanged(object sender, EventArgs e)
+        {
+            CefService.ApplySettingVersion();
+        }
+        void OnSearchUrlChanged(object sender, ValueChangedEventArgs<string> e)
+        {
+            try
+            {
+                var uriBuilder = new UriBuilder(e.NewValue);
+                if ($"{uriBuilder.Uri}" == e.NewValue) return;
+                Task.Delay(10).ContinueWith(_ => SearchUrl.Value = uriBuilder.Uri.AbsoluteUri);
+            }
+            catch { Task.Delay(10).ContinueWith(_ => SearchUrl.Value = _defaultSearchUrl); }
+        }
+        void OnHomeUrlChanged(object sender, ValueChangedEventArgs<string> e)
+        {
+            try
+            {
+                var uriBuilder = new UriBuilder(e.NewValue);
+                if ($"{uriBuilder.Uri}" == e.NewValue) return;
+                Task.Delay(10).ContinueWith(_ => HomeUrl.Value = uriBuilder.Uri.AbsoluteUri);
+            }
+            catch { Task.Delay(10).ContinueWith(_ => HomeUrl.Value = _defaultHomeUrl); }
+        }
+        void OnWebBgColorChanged(object sender, ValueChangedEventArgs<string> e)
+        {
+            if (string.IsNullOrWhiteSpace(e.NewValue)) Task.Delay(10).ContinueWith(_ => WebBgColor.Value = _defaultBgColor);
+            WebPainter.Instance?.ApplyBgTexture();
+        }
+        void OnSoundVolumeChanged(object sender, ValueChangedEventArgs<float> e)
+        {
+            WebPeeperSettingsView.UpdateSoundVolumeTitle?.Invoke();
+            if (!CefService.LibLoadStarted) return;
+            SetSoundVolume(e.NewValue);
+        }
+        void OnWebWindowOpacityChanged(object sender, ValueChangedEventArgs<float> e)
+        {
+            var uiService = WebPeeperModule.Instance.UiService;
+            if (uiService is not null && uiService.BrowserWindow.Opacity > 0)
+            {
+                uiService.BrowserWindow.Opacity = e.NewValue;
+            }
+            WebPeeperSettingsView.UpdateWebWindowOpacityTitle?.Invoke();
+        }
+        void OnIsAutoQuitProcessChanged(object sender, ValueChangedEventArgs<bool> e)
+        {
+            IsAutoPauseWeb.SetDisabled(e.NewValue);
+            WebPeeperSettingsView.UpdateIsAutoPauseWebState?.Invoke();
+        }
+        void OnIsMobileLayoutChanged(object sender, EventArgs e)
+        {
+            if (!CefService.LibLoadStarted) return;
+            CefService.ApplyUserAgent();
+        }
+        void OnIsFollowBhFpsChanged(object sender, EventArgs e)
+        {
+            if (!CefService.LibLoadStarted) return;
+            CefService.ApplyFrameRate();
         }
         void OnSettingsHidden(object sender, EventArgs e)
         {
@@ -198,6 +229,11 @@ namespace BhModule.WebPeeper
         void ToggleWebWindow(object sender, EventArgs e)
         {
             WebPeeperModule.Instance.UiService?.ToggleBrowser();
+        }
+        void ShowBrowserDevTools(object sender, EventArgs e)
+        {
+            if (!CefService.LibLoadStarted) return;
+            CefService.ShowDevTools();
         }
         void OnCaptureKeyboardActivated(object sender, EventArgs e)
         {
@@ -238,19 +274,21 @@ namespace BhModule.WebPeeper
             Browser.SetVolume(val);
         }
     }
-    // SettingsView never call Unload, so cannot bind event (v1.2.0).
+    // SettingsView never call Unload, so dont bind event (v1.2.0).
     internal class WebPeeperSettingsView(SettingCollection settings) : View
     {
         static public Action UpdateSoundVolumeTitle;
         static public Action UpdateWebWindowOpacityTitle;
         static public Action UpdateIsAutoPauseWebState;
-        FlowPanel _rootflowPanel;
+        static public Action DisposeRootFlowPanel;
+        FlowPanel _rootFlowPanel;
         readonly SettingCollection _settings = settings;
         readonly string[] _hiddenSettings = ["CefErrorVersion"];
         protected override void Build(Container buildPanel)
         {
+            DisposeRootFlowPanel?.Invoke();
             var settings = WebPeeperModule.Instance.Settings;
-            _rootflowPanel = new FlowPanel()
+            _rootFlowPanel = new FlowPanel()
             {
                 Size = buildPanel.Size,
                 FlowDirection = ControlFlowDirection.SingleTopToBottom,
@@ -261,26 +299,31 @@ namespace BhModule.WebPeeper
                 AutoSizePadding = new Point(0, 15),
                 Parent = buildPanel
             };
+            DisposeRootFlowPanel = () =>
+            {
+                DisposeRootFlowPanel = null;
+                _rootFlowPanel.Dispose();
+            };
 
             foreach (var setting in _settings.Where(s => s.SessionDefined && !_hiddenSettings.Contains(s.EntryKey)))
             {
                 IView settingView = null;
                 if (setting.Equals(settings.WebBgColor))
                 {
-                    settingView = new HexColorSettingView(settings.WebBgColor, _rootflowPanel.Width);
+                    settingView = new HexColorSettingView(settings.WebBgColor, _rootFlowPanel.Width);
                 }
                 else if (setting.Equals(settings.CefVersion))
                 {
-                    settingView = new CefVersionSettingView(settings.CefVersion, _rootflowPanel.Width);
+                    settingView = new CefVersionSettingView(settings.CefVersion, _rootFlowPanel.Width);
                 }
 
-                if (settingView is not null || (settingView = SettingView.FromType(setting, _rootflowPanel.Width)) is not null)
+                if (settingView is not null || (settingView = SettingView.FromType(setting, _rootFlowPanel.Width)) is not null)
                 {
                     ViewContainer container = new()
                     {
                         WidthSizingMode = SizingMode.Fill,
                         HeightSizingMode = SizingMode.AutoSize,
-                        Parent = _rootflowPanel
+                        Parent = _rootFlowPanel
                     };
                     if (setting.Equals(settings.WebWindowOpacity)
                         && settingView is FloatSettingView settingViewFloat)

@@ -458,6 +458,11 @@ namespace CefHelper
             if (_webBrowser is null) return Task.FromResult<byte[]>([]);
             return _webBrowser.CaptureScreenshotAsync();
         }
+        static public void ShowDevTools()
+        {
+            if (_webBrowser is null) return;
+            _webBrowser.ShowDevTools();
+        }
         static public void SetMobileUserAgent(bool mobile)
         {
             if (_webBrowser?.RequestHandler is RequestHandler handler)
